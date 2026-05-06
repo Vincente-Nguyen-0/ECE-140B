@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>E·Shady — Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  
+  <link rel="stylesheet" href="/static/css/global.css">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+
+</head>
+<body>
+
+  <div class="sky-canvas">
+    <div class="sun-glow"></div>
+    <div class="sun-core"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+  </div>
+
+  <div class="app">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <a href="/" class="logo">
+          <div class="logo-icon"><i class="fas fa-sun"></i></div>
+          E<span class="logo-dot">·</span>Shady
+        </a>
+      </div>
+
+      <nav class="sidebar-nav">
+        <span class="nav-label">Overview</span>
+        <button class="nav-item active" data-action="dashboard">
+          <i class="fas fa-th-large"></i> Dashboard
+        </button>
+        <button class="nav-item" data-action="map">
+          <i class="fas fa-map-marked-alt"></i> Map View
+        </button>
+
+        <span class="nav-label" style="margin-top:0.6rem;">Security</span>
+        <button class="nav-item" data-action="alerts">
+          <i class="fas fa-shield-alt"></i> Alerts
+          <span class="nav-badge">1</span>
+        </button>
+        <button class="nav-item" data-action="event-log">
+          <i class="fas fa-history"></i> Event Log
+        </button>
+
+        <span class="nav-label" style="margin-top:0.6rem;">Account</span>
+        <button class="nav-item" data-action="settings">
+          <i class="fas fa-cog"></i> Settings
+        </button>
+        <button class="nav-item" data-action="sign-out">
+          <i class="fas fa-sign-out-alt"></i> Sign Out
+        </button>
+      </nav>
+
+      <div class="sidebar-user">
+        <div class="user-avatar">A</div>
+        <div class="user-info">
+          <div class="user-name">Andrew</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>My Dashboard</h1>
+          <p>Welcome back, Andrew — your stations are active.</p>
+        </div>
+        <div class="topbar-right">
+          <span class="topbar-time" id="liveTime"></span>
+          <button class="notif-btn" id="notifBtn">
+            <i class="fas fa-bell"></i>
+            <span class="notif-dot"></span>
+          </button>
+        </div>
+      </div>
+
+ 
+ 
+        <div class="umbrellas-grid" id="umbrellaGrid">
+ 
+          <!-- ── UMBRELLA 1: Beach Park ── -->
+          <div class="umb-card" id="card-ESH001">
+            <div class="umb-card-top">
+              <div class="umb-identity">
+                <div class="umb-name">
+                  <span class="status-dot online"></span>
+                  Sunset Beach
+                </div>
+                <div class="umb-id">ID: ESH-001 · Paired 2 days ago</div>
+                <div class="umb-location"><i class="fas fa-map-marker-alt" style="color:var(--sun);font-size:0.65rem;"></i> Coronado Beach, San Diego</div>
+              </div>
+              <span class="umb-status-badge badge-online">● Online</span>
+            </div>
+ 
+            <div class="umb-metrics">
+              <div class="metric">
+                <div class="metric-val sun" id="esh001-output"></div>
+                <div class="metric-lbl"></div>
+              </div>
+              <div class="metric">
+                <div class="metric-val leaf" id="esh001-devices">87W</div>
+                <div class="metric-lbl">Solar Output</div>
+              </div>
+              <div class="metric">
+                <div class="metric-val" id="esh001-temp" style="color:var(--sun-bright);"></div>
+                <div class="metric-lbl"></div>
+              </div>
+            </div>
+ 
+            <div class="battery-row">
+              <span class="battery-lbl"><i class="fas fa-battery-full"></i>&nbsp; Battery</span>
+              <div class="battery-track">
+                <div class="battery-fill" id="esh001-bat-fill" style="width:84%"></div>
+              </div>
+              <span class="battery-pct" id="esh001-bat-pct">84%</span>
+            </div>
+ 
+            <div class="solar-visual">
+              <div class="solar-bars" id="esh001-bars">
+                <!-- Filled by JS -->
+              </div>
+              <div class="solar-sub">Last 12 readings · avg 82W</div>
+            </div>
+ 
+            <div class="guard-row">
+              <div class="guard-left">
+                <div class="guard-icon armed"><i class="fas fa-shield-alt"></i></div>
+                <div>
+                  <div class="guard-title">Theft Guard</div>
+                  <div class="guard-sub">Armed · Inside Safezone</div>
+                </div>
+              </div>
+              <label class="toggle" title="Toggle Theft Guard">
+                <input type="checkbox" checked onchange="toggleGuard(this, 'ESH-001')">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+ 
+            <div class="umb-actions">
+              <button class="action-btn primary-action" onclick="toast('Opening live view for ESH-001...')">
+                <i class="fas fa-chart-area"></i> Live Stats
+              </button>
+              <button class="action-btn" onclick="toast('GPS location loaded for ESH-001.')">
+                <i class="fas fa-map-marker-alt"></i> Locate
+              </button>
+
+              <button class="action-btn danger-action" onclick="removeCard('card-ESH001', 'Sunset Beach')">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+          </div>
+ 
+          <!-- ── UMBRELLA 2: Campsite (alert active) ── -->
+          <div class="umb-card alert-active" id="card-ESH002">
+            <div class="umb-card-top">
+              <div class="umb-identity">
+                <div class="umb-name">
+                  <span class="status-dot alert"></span>
+                  Rooftop Lounge
+                </div>
+                <div class="umb-id">ID: ESH-002 · Paired 5 days ago</div>
+                <div class="umb-location"><i class="fas fa-map-marker-alt" style="color:var(--danger);font-size:0.65rem;"></i> Little Italy, San Diego</div>
+              </div>
+              <span class="umb-status-badge badge-alert">⚠ Alert</span>
+            </div>
+ 
+            <div class="umb-metrics">
+              <div class="metric">
+                <div class="metric-val sun" id="esh002-output"></div>
+                <div class="metric-lbl"></div>
+              </div>
+              <div class="metric">
+                <div class="metric-val leaf" id="esh002-devices">56W</div>
+                <div class="metric-lbl">Solar Output</div>
+              </div>
+              <div class="metric">
+                <div class="metric-val" id="esh002-temp" style="color:var(--sun-bright);"></div>
+                <div class="metric-lbl"></div>
+              </div>
+            </div>
+ 
+            <div class="battery-row">
+              <span class="battery-lbl"><i class="fas fa-battery-half"></i>&nbsp; Battery</span>
+              <div class="battery-track">
+                <div class="battery-fill" id="esh002-bat-fill" style="width:61%; background: linear-gradient(90deg, #F5A623, #FFD166);"></div>
+              </div>
+              <span class="battery-pct" id="esh002-bat-pct" style="color:var(--sun)">61%</span>
+            </div>
+ 
+            <div class="solar-visual">
+              <div class="solar-bars" id="esh002-bars"></div>
+              <div class="solar-sub">Last 12 readings · avg 51W</div>
+            </div>
+ 
+            <div class="guard-row" style="background:rgba(231,76,60,0.04);">
+              <div class="guard-left">
+                <div class="guard-icon triggered"><i class="fas fa-exclamation-triangle"></i></div>
+                <div>
+                  <div class="guard-title" style="color:var(--danger)">Outside Safezone!</div>
+                  <div class="guard-sub">07:42 AM · GPS logged</div>
+                </div>
+              </div>
+              <button class="action-btn danger-action" style="width:auto;padding:0.35rem 0.8rem;font-size:0.72rem;" onclick="resolveAlert()">
+                Dismiss
+              </button>
+            </div>
+ 
+            <div class="umb-actions">
+              <button class="action-btn primary-action" onclick="toast('Opening live view for ESH-002...')">
+                <i class="fas fa-chart-area"></i> Live Stats
+              </button>
+              <button class="action-btn" onclick="toast('GPS location loaded for ESH-002.')">
+                <i class="fas fa-map-marker-alt"></i> Locate
+              <button class="action-btn danger-action" onclick="removeCard('card-ESH002', 'Rooftop Lounge')">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+          </div>
+ 
+          <!-- ── ADD CARD ── -->
+          <div class="add-card" id="addCard" onclick="openAddModal()">
+            <div class="add-card-icon"><i class="fas fa-plus"></i></div>
+            <div class="add-card-title">Add New Station</div>
+            <div class="add-card-sub">Pair a new E·Shady umbrella to your account</div>
+          </div>
+ 
+        </div><!-- /umbrellas-grid -->
+ 
+        <!-- BOTTOM GRID -->
+        <div class="bottom-grid">
+ 
+        </div><!-- /bottom-grid -->
+      </div><!-- /content -->
+    </main>
+  </div>
+
+  <script src="/static/javascript/dashboard.js"></script>
+</body>
+</html>

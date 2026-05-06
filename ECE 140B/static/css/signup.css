@@ -1,0 +1,88 @@
+/* Inherit all your Sign In page layout styles */
+@import url('login.css');
+
+/* Custom Form Row for First/Last Name */
+.form-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+/* Role Selection Styling */
+.role-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.role-btn {
+    padding: 0.8rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+    color: var(--sky-mid);
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.role-btn i {
+    font-size: 0.9rem;
+    opacity: 0.7;
+}
+
+.role-btn:hover {
+    border-color: var(--sun);
+}
+
+.role-btn.active {
+    border-color: var(--sun);
+    background: rgba(245, 166, 35, 0.05);
+    color: var(--sun-dark);
+    box-shadow: 0 4px 12px rgba(245, 166, 35, 0.1);
+}
+
+/* Terms Checkbox styling */
+.terms-check {
+    margin-top: 0.5rem;
+}
+
+.terms-check label {
+    font-weight: 400;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.terms-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--sun);
+}
+
+/* Ensure card is scrollable on small screens if content is long */
+@media (max-height: 850px) and (min-width: 993px) {
+    .signin-card {
+        margin: 2rem 0;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+}
+
+/* Kill blue border for all inputs (The Fix) */
+input:focus, .role-btn:focus {
+    outline: none !important;
+    border-color: var(--sun) !important;
+    box-shadow: 0 0 0 4px rgba(245, 166, 35, 0.1) !important;
+}
