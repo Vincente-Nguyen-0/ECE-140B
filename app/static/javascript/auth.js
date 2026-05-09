@@ -25,6 +25,52 @@ async function fetchJSON(url, options = {}) {
   return response.json();
 }
 
+function initializeGoogleSignIn(retries = 0) {
+  if (!window.GOOGLE_CLIENT_ID) {
+    return;
+  }
+
+  if (window.google && window.google.accounts) {
+    google.accounts.id.initialize({
+      client_id: window.GOOGLE_CLIENT_ID,
+      callback: handleGoogleCredentialResponse,
+      ux_mode: 'popup',
+    });
+    return;
+  }
+
+  if (retries < 10) {
+    setTimeout(() => initializeGoogleSignIn(retries + 1), 200);
+  }
+}
+
+function promptGoogleSignIn() {
+  if (window.google && window.google.accounts) {
+    google.accounts.id.prompt();
+  } else {
+    showError('Google sign-in is not available right now.');
+  }
+}
+
+async function handleGoogleCredentialResponse(response) {
+  if (!response.credential) {
+    showError('Google sign-in failed.');
+    return;
+  }
+
+  try {
+    const data = await fetchJSON(`${API_BASE}/users/google-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: response.credential }),
+    });
+    localStorage.setItem('eshady_token', data.token);
+    window.location.href = '/dashboard';
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
 async function handleLogin(event) {
   event.preventDefault();
   clearError();
@@ -84,6 +130,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginForm) {
     loginForm.addEventListener('submit', handleLogin);
   }
+
+  const googleButton = document.getElementById('googleSignInBtn');
+  if (googleButton) {
+    googleButton.addEventListener('click', () => {
+      promptGoogleSignIn();
+    });
+  }
+
+  initializeGoogleSignIn();
 
   if (signupForm) {
     signupForm.addEventListener('submit', handleSignup);

@@ -39,6 +39,11 @@ async function loadDashboard() {
 
         const stations = await fetchJSON(`${API_BASE}/stations`, { headers: getAuthHeaders() });
         renderStations(stations || []);
+        const status = document.getElementById('dashboardStatus');
+        if (status) {
+            const count = stations?.length || 0;
+            status.textContent = `${count} connected umbrella${count === 1 ? '' : 's'} · live power and location updates.`;
+        }
     } catch (err) {
         console.error(err);
         showLandingError('Unable to load stations. Please sign in again.');
@@ -60,8 +65,8 @@ function renderStations(stations) {
     const addCard = `
       <div class="add-card" id="addCard" onclick="openAddModal()">
         <div class="add-card-icon"><i class="fas fa-plus"></i></div>
-        <div class="add-card-title">Add New Station</div>
-        <div class="add-card-sub">Pair a new E·Shady umbrella to your account</div>
+        <div class="add-card-title">Connect Umbrella</div>
+        <div class="add-card-sub">Pair a new E·Shady device and start live tracking.</div>
       </div>
     `;
 
@@ -312,4 +317,5 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTime();
     setInterval(updateTime, 1000);
     loadDashboard();
+    setInterval(loadDashboard, 15000);
 });
