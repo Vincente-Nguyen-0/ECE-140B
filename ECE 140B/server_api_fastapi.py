@@ -53,6 +53,7 @@ class Station(Base):
     battery_pct = Column(Integer, default=0)
     charge_w = Column(Integer, default=0)
     temperature = Column(Float, default=0.0)
+    voltage = Column(Float, default=0.0)
     online = Column(Boolean, default=True)
     safe_zone = Column(Boolean, default=True)
     alert = Column(Boolean, default=False)
@@ -72,6 +73,7 @@ class Telemetry(Base):
     battery_pct = Column(Integer, nullable=False)
     charge_w = Column(Integer, nullable=False)
     temperature = Column(Float, nullable=False)
+    voltage = Column(Float, nullable=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     alert = Column(Boolean, default=False)
@@ -145,6 +147,7 @@ class TelemetryCreate(BaseModel):
     battery_pct: int
     charge_w: int
     temperature: float
+    voltage: Optional[float] = None
     latitude: float
     longitude: float
     alert: Optional[bool] = False
@@ -163,6 +166,7 @@ class StationOut(BaseModel):
     battery_pct: int
     charge_w: int
     temperature: float
+    voltage: Optional[float]
     online: bool
     safe_zone: bool
     alert: bool
@@ -380,6 +384,7 @@ def create_station(
         battery_pct=station.battery_pct,
         charge_w=station.charge_w,
         temperature=station.temperature,
+        voltage=station.voltage,
         online=station.online,
         safe_zone=station.safe_zone,
         alert=station.alert,
@@ -417,6 +422,7 @@ def update_station(
         battery_pct=station.battery_pct,
         charge_w=station.charge_w,
         temperature=station.temperature,
+        voltage=station.voltage,
         online=station.online,
         safe_zone=station.safe_zone,
         alert=station.alert,
@@ -458,6 +464,7 @@ def receive_esp32_telemetry(
             battery_pct=telemetry.battery_pct,
             charge_w=telemetry.charge_w,
             temperature=telemetry.temperature,
+            voltage=telemetry.voltage or 0.0,
             online=True,
             safe_zone=telemetry.safe_zone,
             alert=telemetry.alert,
@@ -470,6 +477,7 @@ def receive_esp32_telemetry(
         station.battery_pct = telemetry.battery_pct
         station.charge_w = telemetry.charge_w
         station.temperature = telemetry.temperature
+        station.voltage = telemetry.voltage or station.voltage
         station.latitude = telemetry.latitude
         station.longitude = telemetry.longitude
         station.safe_zone = telemetry.safe_zone
@@ -484,6 +492,7 @@ def receive_esp32_telemetry(
         battery_pct=telemetry.battery_pct,
         charge_w=telemetry.charge_w,
         temperature=telemetry.temperature,
+        voltage=telemetry.voltage,
         latitude=telemetry.latitude,
         longitude=telemetry.longitude,
         alert=telemetry.alert,
@@ -502,6 +511,7 @@ def receive_esp32_telemetry(
         battery_pct=station.battery_pct,
         charge_w=station.charge_w,
         temperature=station.temperature,
+        voltage=station.voltage,
         online=station.online,
         safe_zone=station.safe_zone,
         alert=station.alert,

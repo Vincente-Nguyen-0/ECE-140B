@@ -104,6 +104,10 @@ function createStationCard(station) {
             <div class="metric-val" style="color:var(--sun-bright);">${station.temperature.toFixed(1)}°C</div>
             <div class="metric-lbl">Temp</div>
           </div>
+          <div class="metric">
+            <div class="metric-val" style="color:var(--voltage);">${station.voltage ? station.voltage.toFixed(2) + 'V' : 'N/A'}</div>
+            <div class="metric-lbl">Voltage</div>
+          </div>
         </div>
 
         <div class="battery-row">
