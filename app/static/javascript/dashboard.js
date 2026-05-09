@@ -318,4 +318,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateTime, 1000);
     loadDashboard();
     setInterval(loadDashboard, 15000);
+
+    const connectBtn = document.getElementById('connectUmbrellaBtn');
+    if (connectBtn) {
+        connectBtn.addEventListener('click', openAddModal);
+    }
+
+    window.openAddModal = openAddModal;
 });

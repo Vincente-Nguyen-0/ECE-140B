@@ -1,4 +1,5 @@
 const API_BASE = '/api';
+let googleInitialized = false;
 
 function showError(message) {
   const errorBanner = document.getElementById('errorMessage');
@@ -30,22 +31,26 @@ function initializeGoogleSignIn(retries = 0) {
     return;
   }
 
-  if (window.google && window.google.accounts) {
-    google.accounts.id.initialize({
-      client_id: window.GOOGLE_CLIENT_ID,
-      callback: handleGoogleCredentialResponse,
-      ux_mode: 'popup',
-    });
+  if (window.google?.accounts?.id) {
+    if (!googleInitialized) {
+      google.accounts.id.initialize({
+        client_id: window.GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredentialResponse,
+        ux_mode: 'popup',
+      });
+      googleInitialized = true;
+    }
     return;
   }
 
-  if (retries < 10) {
-    setTimeout(() => initializeGoogleSignIn(retries + 1), 200);
+  if (retries < 20) {
+    setTimeout(() => initializeGoogleSignIn(retries + 1), 250);
   }
 }
 
 function promptGoogleSignIn() {
-  if (window.google && window.google.accounts) {
+  initializeGoogleSignIn();
+  if (window.google?.accounts?.id) {
     google.accounts.id.prompt();
   } else {
     showError('Google sign-in is not available right now.');
@@ -139,8 +144,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   initializeGoogleSignIn();
+  window.handleGoogleCredentialResponse = handleGoogleCredentialResponse;
+  window.promptGoogleSignIn = promptGoogleSignIn;
 
   if (signupForm) {
     signupForm.addEventListener('submit', handleSignup);
   }
 });
+
+window.addEventListener('load', initializeGoogleSignIn);
