@@ -65,7 +65,7 @@
       <div class="sidebar-user">
         <div class="user-avatar">A</div>
         <div class="user-info">
-          <div class="user-name">Andrew</div>
+          <div class="user-name" id="sidebarUserName">Andrew</div>
         </div>
       </div>
     </aside>
@@ -88,153 +88,10 @@
  
  
         <div class="umbrellas-grid" id="umbrellaGrid">
- 
-          <!-- ── UMBRELLA 1: Beach Park ── -->
-          <div class="umb-card" id="card-ESH001">
-            <div class="umb-card-top">
-              <div class="umb-identity">
-                <div class="umb-name">
-                  <span class="status-dot online"></span>
-                  Sunset Beach
-                </div>
-                <div class="umb-id">ID: ESH-001 · Paired 2 days ago</div>
-                <div class="umb-location"><i class="fas fa-map-marker-alt" style="color:var(--sun);font-size:0.65rem;"></i> Coronado Beach, San Diego</div>
-              </div>
-              <span class="umb-status-badge badge-online">● Online</span>
-            </div>
- 
-            <div class="umb-metrics">
-              <div class="metric">
-                <div class="metric-val sun" id="esh001-output"></div>
-                <div class="metric-lbl"></div>
-              </div>
-              <div class="metric">
-                <div class="metric-val leaf" id="esh001-devices">87W</div>
-                <div class="metric-lbl">Solar Output</div>
-              </div>
-              <div class="metric">
-                <div class="metric-val" id="esh001-temp" style="color:var(--sun-bright);"></div>
-                <div class="metric-lbl"></div>
-              </div>
-            </div>
- 
-            <div class="battery-row">
-              <span class="battery-lbl"><i class="fas fa-battery-full"></i>&nbsp; Battery</span>
-              <div class="battery-track">
-                <div class="battery-fill" id="esh001-bat-fill" style="width:84%"></div>
-              </div>
-              <span class="battery-pct" id="esh001-bat-pct">84%</span>
-            </div>
- 
-            <div class="solar-visual">
-              <div class="solar-bars" id="esh001-bars">
-                <!-- Filled by JS -->
-              </div>
-              <div class="solar-sub">Last 12 readings · avg 82W</div>
-            </div>
- 
-            <div class="guard-row">
-              <div class="guard-left">
-                <div class="guard-icon armed"><i class="fas fa-shield-alt"></i></div>
-                <div>
-                  <div class="guard-title">Theft Guard</div>
-                  <div class="guard-sub">Armed · Inside Safezone</div>
-                </div>
-              </div>
-              <label class="toggle" title="Toggle Theft Guard">
-                <input type="checkbox" checked onchange="toggleGuard(this, 'ESH-001')">
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
- 
-            <div class="umb-actions">
-              <button class="action-btn primary-action" onclick="toast('Opening live view for ESH-001...')">
-                <i class="fas fa-chart-area"></i> Live Stats
-              </button>
-              <button class="action-btn" onclick="toast('GPS location loaded for ESH-001.')">
-                <i class="fas fa-map-marker-alt"></i> Locate
-              </button>
-
-              <button class="action-btn danger-action" onclick="removeCard('card-ESH001', 'Sunset Beach')">
-                <i class="fas fa-trash-alt"></i>
-              </button>
-            </div>
+          <div class="dashboard-placeholder" id="stationLoading">
+            <div class="placeholder-icon"><i class="fas fa-spinner fa-spin"></i></div>
+            <div class="placeholder-text">Loading your umbrella stations...</div>
           </div>
- 
-          <!-- ── UMBRELLA 2: Campsite (alert active) ── -->
-          <div class="umb-card alert-active" id="card-ESH002">
-            <div class="umb-card-top">
-              <div class="umb-identity">
-                <div class="umb-name">
-                  <span class="status-dot alert"></span>
-                  Rooftop Lounge
-                </div>
-                <div class="umb-id">ID: ESH-002 · Paired 5 days ago</div>
-                <div class="umb-location"><i class="fas fa-map-marker-alt" style="color:var(--danger);font-size:0.65rem;"></i> Little Italy, San Diego</div>
-              </div>
-              <span class="umb-status-badge badge-alert">⚠ Alert</span>
-            </div>
- 
-            <div class="umb-metrics">
-              <div class="metric">
-                <div class="metric-val sun" id="esh002-output"></div>
-                <div class="metric-lbl"></div>
-              </div>
-              <div class="metric">
-                <div class="metric-val leaf" id="esh002-devices">56W</div>
-                <div class="metric-lbl">Solar Output</div>
-              </div>
-              <div class="metric">
-                <div class="metric-val" id="esh002-temp" style="color:var(--sun-bright);"></div>
-                <div class="metric-lbl"></div>
-              </div>
-            </div>
- 
-            <div class="battery-row">
-              <span class="battery-lbl"><i class="fas fa-battery-half"></i>&nbsp; Battery</span>
-              <div class="battery-track">
-                <div class="battery-fill" id="esh002-bat-fill" style="width:61%; background: linear-gradient(90deg, #F5A623, #FFD166);"></div>
-              </div>
-              <span class="battery-pct" id="esh002-bat-pct" style="color:var(--sun)">61%</span>
-            </div>
- 
-            <div class="solar-visual">
-              <div class="solar-bars" id="esh002-bars"></div>
-              <div class="solar-sub">Last 12 readings · avg 51W</div>
-            </div>
- 
-            <div class="guard-row" style="background:rgba(231,76,60,0.04);">
-              <div class="guard-left">
-                <div class="guard-icon triggered"><i class="fas fa-exclamation-triangle"></i></div>
-                <div>
-                  <div class="guard-title" style="color:var(--danger)">Outside Safezone!</div>
-                  <div class="guard-sub">07:42 AM · GPS logged</div>
-                </div>
-              </div>
-              <button class="action-btn danger-action" style="width:auto;padding:0.35rem 0.8rem;font-size:0.72rem;" onclick="resolveAlert()">
-                Dismiss
-              </button>
-            </div>
- 
-            <div class="umb-actions">
-              <button class="action-btn primary-action" onclick="toast('Opening live view for ESH-002...')">
-                <i class="fas fa-chart-area"></i> Live Stats
-              </button>
-              <button class="action-btn" onclick="toast('GPS location loaded for ESH-002.')">
-                <i class="fas fa-map-marker-alt"></i> Locate
-              <button class="action-btn danger-action" onclick="removeCard('card-ESH002', 'Rooftop Lounge')">
-                <i class="fas fa-trash-alt"></i>
-              </button>
-            </div>
-          </div>
- 
-          <!-- ── ADD CARD ── -->
-          <div class="add-card" id="addCard" onclick="openAddModal()">
-            <div class="add-card-icon"><i class="fas fa-plus"></i></div>
-            <div class="add-card-title">Add New Station</div>
-            <div class="add-card-sub">Pair a new E·Shady umbrella to your account</div>
-          </div>
- 
         </div><!-- /umbrellas-grid -->
  
         <!-- BOTTOM GRID -->

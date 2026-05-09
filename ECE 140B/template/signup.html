@@ -59,6 +59,13 @@
           <h1>Create Account</h1>
           <p class="card-sub">Start your solar journey with E·Shady</p>
 
+          <div id="errorMessage" class="error-banner" role="alert" style="display:none;">
+            <i class="fas fa-exclamation-circle"></i>
+            <span id="errorText">Please fix the highlighted fields.</span>
+          </div>
+
+          <form id="signupForm" novalidate>
+
             <!-- Name Fields (Row) -->
             <div class="form-row">
               <div class="form-group">
@@ -112,5 +119,5 @@
         <div class="footer-copy">&copy; 2026 E·Shady. All rights reserved.</div>
     </footer>
   </div>
-</body>
+  <script src="/static/javascript/auth.js" defer></script></body>
 </html>
