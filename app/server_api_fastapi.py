@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -266,6 +266,21 @@ def on_startup() -> None:
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.head("/")
+def index_head() -> Response:
+    return Response(status_code=status.HTTP_200_OK)
+
+
+@app.get("/health", response_class=JSONResponse)
+def health() -> JSONResponse:
+    return JSONResponse({"status": "ok"})
+
+
+@app.head("/health")
+def health_head() -> Response:
+    return Response(status_code=status.HTTP_200_OK)
 
 
 @app.get("/login", response_class=HTMLResponse)
