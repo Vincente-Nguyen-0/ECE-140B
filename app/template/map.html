@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E·SHADY — GPS Tracker</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <link rel="stylesheet" href="/app/static/css/global.css">
+  <link rel="stylesheet" href="/app/static/css/maps.css">
+  <script src="/app/static/javascript/maps.js"></script>
+</head>
+<body>
+
+  <div class="sky-canvas">
+    <div class="sun-glow"></div>
+    <div class="sun-core"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+  </div>
+
+  <header id="site-header">
+    <a href="/" class="logo">
+      <span class="logo-icon">☀</span>
+      E<span class="logo-dot">·</span>SHADY
+    </a>
+    <nav>
+      <a href="#" class="btn-signin">Back to Dashbaord</a>
+    </nav>
+  </header>
+
+  <div class="page">
+    <main class="tracker-layout">
+
+      <aside class="info-panel">
+
+        <div class="panel-header">
+          <span class="section-label">Live GPS</span>
+          <h1 class="section-heading" style="font-size:clamp(1.5rem,3vw,2.2rem)">Device Tracker</h1>
+          <div class="status-row">
+            <span class="status-dot" id="status-dot"></span>
+            <span class="status-text" id="status-text">Waiting for signal…</span>
+          </div>
+        </div>
+
+        <div class="coord-grid">
+          <div class="coord-card">
+            <span class="coord-label">Latitude</span>
+            <span class="coord-value" id="val-lat">—</span>
+          </div>
+          <div class="coord-card">
+            <span class="coord-label">Longitude</span>
+            <span class="coord-value" id="val-lng">—</span>
+          </div>
+        </div>
+
+        <p class="last-update">Last update: <span id="last-update-time">never</span></p>
+
+        <div class="panel-actions">
+          <button class="btn-primary" id="btn-center">⊙ Center Map</button>
+          <button class="btn-outline" id="btn-track">◉ Track Path</button>
+        </div>
+
+      </aside>
+
+      <section class="map-section">
+        <div id="map"></div>
+        <div class="map-overlay-badge">
+          <span class="badge-dot"></span>
+          <span id="badge-label">Offline</span>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <a href="/" class="footer-logo">
+      <span class="logo-icon" style="width:26px;height:26px;font-size:0.75rem;">☀</span>
+      E<span class="logo-dot">·</span>SHADY
+    </a>
+    <div class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Support</a>
+      <a href="#">API Docs</a>
+    </div>
+    <p class="footer-copy">© 2025 E·SHADY. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>
