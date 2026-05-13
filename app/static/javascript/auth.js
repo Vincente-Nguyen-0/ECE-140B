@@ -49,12 +49,7 @@ function initializeGoogleSignIn(retries = 0) {
 }
 
 function promptGoogleSignIn() {
-  initializeGoogleSignIn();
-  if (window.google?.accounts?.id) {
-    google.accounts.id.prompt();
-  } else {
-    showError('Google sign-in is not available right now.');
-  }
+  window.location.href = '/auth/google';
 }
 
 async function handleGoogleCredentialResponse(response) {

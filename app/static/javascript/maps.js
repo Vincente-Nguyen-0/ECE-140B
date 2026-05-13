@@ -1,56 +1,45 @@
+const API_BASE = '/api';
+const POLL_INTERVAL = 5000;
+const DEFAULT_CENTER = [32.7157, -117.1611];
+const DEFAULT_ZOOM = 13;
 
-const API_URL      = 'http://localhost:5001/api/gps'; 
-const POLL_INTERVAL = 3000;  
-const DEFAULT_ZOOM  = 16;
-
-let map, marker, polyline;
-let pathCoords   = [];
+let map;
+let marker;
+let polyline;
 let trackingPath = false;
-let lastLat = null, lastLng = null;
+let pathCoords = [];
+let lastLat = null;
+let lastLng = null;
 
-const elLat       = document.getElementById('val-lat');
-const elLng       = document.getElementById('val-lng');
-const elAlt       = document.getElementById('val-alt');
-const elSpeed     = document.getElementById('val-speed');
-const elCourse    = document.getElementById('val-course');
-const elSats      = document.getElementById('val-sats');
-const elDatetime  = document.getElementById('val-datetime');
-const elFix       = document.getElementById('val-fix');
-const elStatus    = document.getElementById('status-text');
-const elDot       = document.getElementById('status-dot');
-const elLastUpd   = document.getElementById('last-update-time');
-const elBadgeDot  = document.querySelector('.badge-dot');
-const elBadgeLbl  = document.getElementById('badge-label');
-const btnCenter   = document.getElementById('btn-center');
-const btnTrack    = document.getElementById('btn-track');
-
-function spawnParticles () {
-  const canvas = document.querySelector('.sky-canvas');
-  for (let i = 0; i < 18; i++) {
-    const p = document.createElement('div');
-    p.className = 'particle';
-    const size = Math.random() * 4 + 2;
-    p.style.cssText = `
-      width:${size}px; height:${size}px;
-      left:${Math.random()*100}%;
-      bottom:${Math.random()*20}%;
-      animation-duration:${Math.random()*12+8}s;
-      animation-delay:${Math.random()*8}s;
-    `;
-    canvas.appendChild(p);
-  }
+function getAuthHeaders() {
+  const token = localStorage.getItem('eshady_token');
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
 }
-spawnParticles();
 
-window.addEventListener('scroll', () => {
-  document.getElementById('site-header')
-    .classList.toggle('scrolled', window.scrollY > 10);
-});
+function setText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+}
 
-function initMap () {
+function setStatus(state, text) {
+  const dot = document.getElementById('status-dot');
+  const status = document.getElementById('status-text');
+  if (dot) dot.className = `status-dot ${state}`;
+  if (status) status.textContent = text;
+}
+
+function setBadge(state, text) {
+  const dot = document.querySelector('.badge-dot');
+  const label = document.getElementById('badge-label');
+  if (dot) dot.className = `badge-dot ${state}`;
+  if (label) label.textContent = text;
+}
+
+function initMap() {
   map = L.map('map', {
-    center: [20, 0],
-    zoom: 3,
+    center: DEFAULT_CENTER,
+    zoom: 10,
     zoomControl: true,
     attributionControl: false,
   });
@@ -59,117 +48,120 @@ function initMap () {
     maxZoom: 19,
   }).addTo(map);
 
-  const markerIcon = L.divIcon({
-    className: '',
-    html: '<div class="custom-marker"></div>',
-    iconSize: [36, 36],
-    iconAnchor: [18, 36],
-    popupAnchor: [0, -40],
-  });
-
-  marker = L.marker([20, 0], { icon: markerIcon }).addTo(map);
-  marker.bindPopup('');
+  marker = L.marker(DEFAULT_CENTER).addTo(map);
+  marker.bindPopup('Waiting for station location...');
 
   polyline = L.polyline([], {
-    color: 'rgba(245,166,35,0.7)',
+    color: 'rgba(245,166,35,0.8)',
     weight: 3,
     dashArray: '6 4',
   }).addTo(map);
 }
 
-function updateUI (data) {
-  const lat  = parseFloat(data.latitude);
-  const lng  = parseFloat(data.longitude);
-  const valid = data.fix_valid === true || data.fix_valid === 'true';
+async function fetchStations() {
+  const response = await fetch(`${API_BASE}/stations`, { headers: getAuthHeaders() });
+  if (response.status === 401) {
+    localStorage.removeItem('eshady_token');
+    window.location.href = '/login';
+    return [];
+  }
+  if (!response.ok) {
+    throw new Error('Unable to load station locations.');
+  }
+  return response.json();
+}
 
-  elLat.textContent   = lat.toFixed(6) + '° ' + (lat >= 0 ? 'N' : 'S');
-  elLng.textContent   = lng.toFixed(6) + '° ' + (lng >= 0 ? 'E' : 'W');
-  elAlt.textContent   = data.altitude_m    + ' m';
-  elSpeed.textContent = data.speed_kmph    + ' km/h';
-  elCourse.textContent= data.course_deg    + '°';
-  elSats.textContent  = data.satellites;
-  elDatetime.textContent = data.datetime   || '—';
-  elFix.textContent   = valid ? '✅ Valid' : '⚠️ Invalid';
+function chooseStation(stations) {
+  return stations.find((station) => Number(station.latitude) || Number(station.longitude)) || stations[0];
+}
 
-  if (valid) {
-    setStatus('live', 'Live — GPS fix acquired');
-    setBadge('live', 'Live');
-  } else {
-    setStatus('error', 'No fix — searching…');
-    setBadge('', 'No Fix');
+function updateLocation(station) {
+  if (!station) {
+    setStatus('error', 'No paired stations yet');
+    setBadge('', 'Offline');
+    setText('val-lat', '--');
+    setText('val-lng', '--');
+    setText('last-update-time', 'never');
+    return;
   }
 
-  elLastUpd.textContent = new Date().toLocaleTimeString();
+  const lat = Number(station.latitude || 0);
+  const lng = Number(station.longitude || 0);
+  const isLive = Boolean(station.online);
+  const state = isLive ? 'live' : 'error';
+  const label = isLive ? 'Live' : 'Offline';
+  const location = [lat, lng];
 
-  if (valid && !isNaN(lat) && !isNaN(lng)) {
-    const latlng = [lat, lng];
+  setStatus(state, `${station.name} ${isLive ? 'is reporting location' : 'is offline'}`);
+  setBadge(state, label);
+  setText('val-lat', `${lat.toFixed(6)} ${lat >= 0 ? 'N' : 'S'}`);
+  setText('val-lng', `${lng.toFixed(6)} ${lng >= 0 ? 'E' : 'W'}`);
+  setText('last-update-time', station.last_seen ? new Date(station.last_seen).toLocaleTimeString() : 'unknown');
 
-    marker.setLatLng(latlng);
-    marker.setPopupContent(`
-      <div class="popup-title">📍 Device Location</div>
-      <b>Lat:</b> ${lat.toFixed(6)}<br>
-      <b>Lng:</b> ${lng.toFixed(6)}<br>
-      <b>Alt:</b> ${data.altitude_m} m<br>
-      <b>Speed:</b> ${data.speed_kmph} km/h
-    `);
+  marker.setLatLng(location);
+  marker.setPopupContent(`
+    <strong>${escapeHTML(station.name)}</strong><br>
+    ${escapeHTML(station.location || 'No location label')}<br>
+    Battery: ${station.battery_pct}%<br>
+    Output: ${station.charge_w}W
+  `);
 
-    if (lastLat === null) {
-      map.setView(latlng, DEFAULT_ZOOM);
-    }
-
-    if (trackingPath) {
-      pathCoords.push(latlng);
-      polyline.setLatLngs(pathCoords);
-    }
-
-    lastLat = lat;
-    lastLng = lng;
+  if (lastLat === null || lastLng === null) {
+    map.setView(location, DEFAULT_ZOOM);
   }
+
+  if (trackingPath) {
+    pathCoords.push(location);
+    polyline.setLatLngs(pathCoords);
+  }
+
+  lastLat = lat;
+  lastLng = lng;
 }
 
-function setStatus (state, text) {
-  elDot.className   = 'status-dot ' + state;
-  elStatus.textContent = text;
-}
-
-function setBadge (state, label) {
-  elBadgeDot.className = 'badge-dot ' + state;
-  elBadgeLbl.textContent = label;
-}
-
-async function fetchGPS () {
+async function refreshMap() {
   try {
-    const res = await fetch(API_URL);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    updateUI(data);
-  } catch (err) {
+    const stations = await fetchStations();
+    updateLocation(chooseStation(stations || []));
+  } catch (error) {
+    console.warn(error);
     setStatus('error', 'Cannot reach server');
     setBadge('', 'Offline');
-    console.warn('GPS fetch error:', err);
   }
 }
 
-btnCenter.addEventListener('click', () => {
-  if (lastLat !== null) {
-    map.flyTo([lastLat, lastLng], DEFAULT_ZOOM, { duration: 1.2 });
+function escapeHTML(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initMap();
+  refreshMap();
+  setInterval(refreshMap, POLL_INTERVAL);
+
+  const centerButton = document.getElementById('btn-center');
+  if (centerButton) {
+    centerButton.addEventListener('click', () => {
+      if (lastLat !== null && lastLng !== null) {
+        map.flyTo([lastLat, lastLng], DEFAULT_ZOOM, { duration: 1.2 });
+      }
+    });
+  }
+
+  const trackButton = document.getElementById('btn-track');
+  if (trackButton) {
+    trackButton.addEventListener('click', () => {
+      trackingPath = !trackingPath;
+      trackButton.textContent = trackingPath ? 'Stop Tracking' : 'Track Path';
+      if (trackingPath) {
+        pathCoords = lastLat !== null && lastLng !== null ? [[lastLat, lastLng]] : [];
+        polyline.setLatLngs(pathCoords);
+      }
+    });
   }
 });
-
-btnTrack.addEventListener('click', () => {
-  trackingPath = !trackingPath;
-  if (trackingPath) {
-    btnTrack.textContent  = '⏹ Stop Tracking';
-    btnTrack.style.background = 'rgba(231,76,60,0.15)';
-    btnTrack.style.borderColor = 'var(--danger)';
-    pathCoords = lastLat !== null ? [[lastLat, lastLng]] : [];
-  } else {
-    btnTrack.textContent = '◉ Track Path';
-    btnTrack.style.background = '';
-    btnTrack.style.borderColor = '';
-  }
-});
-
-initMap();
-fetchGPS();                                 
-setInterval(fetchGPS, POLL_INTERVAL);         

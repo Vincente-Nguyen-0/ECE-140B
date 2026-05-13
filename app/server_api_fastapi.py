@@ -1,9 +1,11 @@
 from datetime import datetime
 import hashlib
 import hmac
+import json
 import os
 import secrets
 from typing import List, Optional
+from urllib.parse import urlencode
 
 from dotenv import load_dotenv
 
@@ -11,12 +13,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from google.auth.transport import requests as grequests
 from google.oauth2 import id_token
 from pydantic import BaseModel, EmailStr, Field
+import requests
 from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer,
                         String, create_engine)
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
@@ -89,7 +92,7 @@ class UserCreate(BaseModel):
     first_name: str = Field(..., min_length=1)
     last_name: str = Field(..., min_length=1)
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=1)
 
     model_config = {"from_attributes": True}
 
@@ -235,6 +238,32 @@ def create_session_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def get_or_create_google_user(db: Session, id_info: dict) -> User:
+    email = id_info.get("email", "").lower().strip()
+    if not email:
+        raise HTTPException(status_code=401, detail="Google account did not include an email.")
+
+    first_name = id_info.get("given_name") or id_info.get("name") or "User"
+    last_name = id_info.get("family_name") or ""
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        user = User(
+            email=email,
+            first_name=first_name.strip().title(),
+            last_name=last_name.strip().title(),
+            password_hash="",
+            token=create_session_token(),
+        )
+    else:
+        user.token = create_session_token()
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def get_user_by_token(db: Session, token: str) -> Optional[User]:
     return db.query(User).filter(User.token == token).first()
 
@@ -296,12 +325,108 @@ def login_page(request: Request) -> HTMLResponse:
 
 @app.get("/signup", response_class=HTMLResponse)
 def signup_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("signup.html", {"request": request})
+    return templates.TemplateResponse(
+        "signup.html",
+        {
+            "request": request,
+            "google_client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+        },
+    )
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("dashboard.html", {"request": request})
+
+
+@app.get("/map", response_class=HTMLResponse)
+def map_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("map.html", {"request": request})
+
+
+def get_google_redirect_uri(request: Request) -> str:
+    return os.getenv("GOOGLE_REDIRECT_URI") or str(request.url_for("google_oauth_callback"))
+
+
+@app.get("/auth/google")
+def google_oauth_start(request: Request, next: str = "/dashboard") -> RedirectResponse:
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not google_client_id:
+        return RedirectResponse("/login?oauth_error=missing_google_client_id")
+
+    safe_next = next if next.startswith("/") and not next.startswith("//") else "/dashboard"
+    params = {
+        "client_id": google_client_id,
+        "redirect_uri": get_google_redirect_uri(request),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "online",
+        "prompt": "select_account",
+        "state": safe_next,
+    }
+    return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}")
+
+
+@app.get("/auth/google/callback", response_class=HTMLResponse)
+def google_oauth_callback(
+    request: Request,
+    code: Optional[str] = None,
+    state: str = "/dashboard",
+    error: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    if error:
+        return HTMLResponse(f"Google sign-in failed: {error}", status_code=400)
+    if not code:
+        return HTMLResponse("Google sign-in failed: missing authorization code.", status_code=400)
+
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+    google_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    if not google_client_id or not google_client_secret:
+        return HTMLResponse("Google OAuth is not configured.", status_code=500)
+
+    token_response = requests.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "code": code,
+            "client_id": google_client_id,
+            "client_secret": google_client_secret,
+            "redirect_uri": get_google_redirect_uri(request),
+            "grant_type": "authorization_code",
+        },
+        timeout=10,
+    )
+    if not token_response.ok:
+        return HTMLResponse("Google sign-in failed while exchanging the authorization code.", status_code=401)
+
+    token_data = token_response.json()
+    google_id_token = token_data.get("id_token")
+    if not google_id_token:
+        return HTMLResponse("Google sign-in failed: missing identity token.", status_code=401)
+
+    try:
+        id_info = id_token.verify_oauth2_token(google_id_token, grequests.Request(), google_client_id)
+    except ValueError:
+        return HTMLResponse("Google sign-in failed: invalid identity token.", status_code=401)
+
+    user = get_or_create_google_user(db, id_info)
+    redirect_to = state if state.startswith("/") and not state.startswith("//") else "/dashboard"
+
+    return HTMLResponse(
+        f"""
+        <!doctype html>
+        <html lang="en">
+        <head><meta charset="utf-8"><title>Signing in...</title></head>
+        <body>
+          <script>
+            localStorage.setItem("eshady_token", {json.dumps(user.token)});
+            window.location.replace({json.dumps(redirect_to)});
+          </script>
+          Signing you in...
+        </body>
+        </html>
+        """
+    )
 
 
 @app.post("/api/users/signup", response_model=UserAuthResponse)
@@ -343,28 +468,7 @@ def google_login(request_body: GoogleLoginRequest, db: Session = Depends(get_db)
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid Google credential.")
 
-    email = id_info.get("email", "").lower()
-    first_name = id_info.get("given_name", "User")
-    last_name = id_info.get("family_name", "")
-
-    user = db.query(User).filter(User.email == email).first()
-    if user is None:
-        token = create_session_token()
-        user = User(
-            email=email,
-            first_name=first_name.strip().title(),
-            last_name=last_name.strip().title(),
-            password_hash="",
-            token=token,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        user.token = create_session_token()
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    user = get_or_create_google_user(db, id_info)
 
     return UserAuthResponse(
         user_id=user.id,

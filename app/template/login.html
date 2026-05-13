@@ -11,8 +11,8 @@
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
-  <link rel="stylesheet" href="/app/static/css/global.css">
-  <link rel="stylesheet" href="/app/static/css/login.css">
+  <link rel="stylesheet" href="/static/css/global.css">
+  <link rel="stylesheet" href="/static/css/login.css">
 </head>
 <body>
 
@@ -62,15 +62,11 @@
           </a>
 
           <h1>Welcome back</h1>
-          <p class="card-sub">Sign in with Google to access your umbrella dashboard.</p>
+          <p class="card-sub">Sign in to access your umbrella dashboard.</p>
 
           <div id="errorMessage" class="error-banner" role="alert" style="display:none;">
             <i class="fas fa-exclamation-circle"></i>
             <span id="errorText">Invalid email or password.</span>
-          </div>
-
-          <div class="info-banner" style="margin-bottom:1rem; padding:1rem; background:rgba(66,133,244,0.08); border:1px solid rgba(66,133,244,0.14); border-radius:0.75rem; color:#1f3a93;">
-            Sign in with Google using <strong>david.e.brin@gmail.com</strong>. Other sign-in methods are disabled.
           </div>
 
           <form id="signinForm" novalidate>

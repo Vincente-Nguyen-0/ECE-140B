@@ -276,6 +276,10 @@ function initNavigation() {
                 logout();
                 return;
             }
+            if (action === 'map') {
+                window.location.href = '/map';
+                return;
+            }
             toast(`${action.charAt(0).toUpperCase() + action.slice(1)} coming soon.`);
         });
     });
