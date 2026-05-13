@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./eshady.db")
 SECRET_KEY = os.environ.get("ESHADY_SECRET_KEY", "eshady-secret-key-2026")
+GOOGLE_CALLBACK_PATH = "/auth/google/callback"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -344,8 +345,25 @@ def map_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("map.html", {"request": request})
 
 
+def get_public_base_url(request: Request) -> str:
+    configured_base_url = os.getenv("PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL")
+    if configured_base_url:
+        return configured_base_url.rstrip("/")
+
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if forwarded_host:
+        scheme = forwarded_proto or request.url.scheme
+        return f"{scheme}://{forwarded_host}".rstrip("/")
+
+    return str(request.base_url).rstrip("/")
+
+
 def get_google_redirect_uri(request: Request) -> str:
-    return os.getenv("GOOGLE_REDIRECT_URI") or str(request.url_for("google_oauth_callback"))
+    configured_redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+    if configured_redirect_uri:
+        return configured_redirect_uri
+    return f"{get_public_base_url(request)}{GOOGLE_CALLBACK_PATH}"
 
 
 @app.get("/auth/google")

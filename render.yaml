@@ -11,3 +11,7 @@ services:
         value: eshady-secret-key-2026
       - key: GOOGLE_CLIENT_ID
         value: your-google-client-id
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://ece-140b.onrender.com/auth/google/callback

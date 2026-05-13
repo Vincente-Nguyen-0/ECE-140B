@@ -132,6 +132,32 @@ function initLoginForm() {
   });
 }
 
+async function initSignedInHeader() {
+  const token = localStorage.getItem('eshady_token');
+  if (!token) return;
+
+  try {
+    const response = await fetch('/api/users/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) return;
+
+    const user = await response.json();
+    document.querySelectorAll('.logo, .footer-logo').forEach((link) => {
+      link.setAttribute('href', '/dashboard');
+    });
+
+    const signInLink = document.querySelector('.btn-signin');
+    if (signInLink) {
+      signInLink.href = '/dashboard';
+      signInLink.textContent = user.email || 'Dashboard';
+      signInLink.title = 'Open dashboard';
+    }
+  } catch (error) {
+    console.warn('Unable to load signed-in header state.', error);
+  }
+}
+
 
 function escapeHTML(str) {
   return str
@@ -147,4 +173,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initHeaderScroll();
   initContactForm();
   initLoginForm();
+  initSignedInHeader();
 });

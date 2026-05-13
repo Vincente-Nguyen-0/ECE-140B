@@ -126,6 +126,11 @@ async function handleSignup(event) {
 document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('signinForm');
   const signupForm = document.getElementById('signupForm');
+  if (localStorage.getItem('eshady_token')) {
+    document.querySelectorAll('.logo, .card-logo, .footer-logo').forEach((link) => {
+      link.setAttribute('href', '/dashboard');
+    });
+  }
 
   if (loginForm) {
     loginForm.addEventListener('submit', handleLogin);

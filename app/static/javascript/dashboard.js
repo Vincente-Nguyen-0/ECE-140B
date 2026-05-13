@@ -33,6 +33,10 @@ async function loadDashboard() {
         if (user?.first_name) {
             const userName = document.getElementById('sidebarUserName');
             if (userName) userName.textContent = user.first_name;
+            const userEmail = document.getElementById('sidebarUserEmail');
+            if (userEmail) userEmail.textContent = user.email;
+            const userAvatar = document.querySelector('.user-avatar');
+            if (userAvatar) userAvatar.textContent = user.first_name.charAt(0).toUpperCase();
             const welcomeText = document.querySelector('.topbar-left p');
             if (welcomeText) welcomeText.textContent = `Welcome back, ${user.first_name} — your stations are active.`;
         }
