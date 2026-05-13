@@ -366,11 +366,28 @@ def get_google_redirect_uri(request: Request) -> str:
     return f"{get_public_base_url(request)}{GOOGLE_CALLBACK_PATH}"
 
 
+def google_oauth_config_status(request: Request) -> dict:
+    redirect_uri = get_google_redirect_uri(request)
+    return {
+        "client_id_configured": bool(os.getenv("GOOGLE_CLIENT_ID")),
+        "client_secret_configured": bool(os.getenv("GOOGLE_CLIENT_SECRET")),
+        "redirect_uri": redirect_uri,
+        "redirect_uri_is_callback": redirect_uri.endswith(GOOGLE_CALLBACK_PATH),
+    }
+
+
+@app.get("/api/auth/google/config", response_class=JSONResponse)
+def google_config(request: Request) -> JSONResponse:
+    return JSONResponse(google_oauth_config_status(request))
+
+
 @app.get("/auth/google")
 def google_oauth_start(request: Request, next: str = "/dashboard") -> RedirectResponse:
     google_client_id = os.getenv("GOOGLE_CLIENT_ID")
-    if not google_client_id:
-        return RedirectResponse("/login?oauth_error=missing_google_client_id")
+    google_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    if not google_client_id or not google_client_secret:
+        missing = "client_id" if not google_client_id else "client_secret"
+        return RedirectResponse(f"/login?oauth_error=missing_google_{missing}")
 
     safe_next = next if next.startswith("/") and not next.startswith("//") else "/dashboard"
     params = {
@@ -401,7 +418,11 @@ def google_oauth_callback(
     google_client_id = os.getenv("GOOGLE_CLIENT_ID")
     google_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
     if not google_client_id or not google_client_secret:
-        return HTMLResponse("Google OAuth is not configured.", status_code=500)
+        return HTMLResponse(
+            "Google OAuth is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, "
+            f"and GOOGLE_REDIRECT_URI={get_google_redirect_uri(request)} in Render.",
+            status_code=500,
+        )
 
     token_response = requests.post(
         "https://oauth2.googleapis.com/token",

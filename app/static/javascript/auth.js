@@ -17,6 +17,18 @@ function clearError() {
   }
 }
 
+function showOAuthErrorFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const error = params.get('oauth_error');
+  if (!error) return;
+
+  const messages = {
+    missing_google_client_id: 'Google sign-in is missing GOOGLE_CLIENT_ID on the server.',
+    missing_google_client_secret: 'Google sign-in is missing GOOGLE_CLIENT_SECRET on the server.',
+  };
+  showError(messages[error] || 'Google sign-in is not configured on the server.');
+}
+
 async function fetchJSON(url, options = {}) {
   const response = await fetch(url, options);
   if (!response.ok) {
@@ -131,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
       link.setAttribute('href', '/dashboard');
     });
   }
+  showOAuthErrorFromQuery();
 
   if (loginForm) {
     loginForm.addEventListener('submit', handleLogin);
