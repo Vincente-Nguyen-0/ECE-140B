@@ -306,7 +306,29 @@ def dashboard_page(request: Request) -> HTMLResponse:
 
 @app.post("/api/users/signup", response_model=UserAuthResponse)
 def signup_user(user_in: UserCreate, db: Session = Depends(get_db)) -> UserAuthResponse:
-    raise HTTPException(status_code=403, detail="Please sign in with Google.")
+    existing = db.query(User).filter(User.email == user_in.email.lower()).first()
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="Email already registered.")
+
+    token = create_session_token()
+    user = User(
+        email=user_in.email.lower(),
+        first_name=user_in.first_name.strip().title(),
+        last_name=user_in.last_name.strip().title(),
+        password_hash=hash_password(user_in.password),
+        token=token,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return UserAuthResponse(
+        user_id=user.id,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        token=user.token,
+    )
 
 
 @app.post("/api/users/google-login", response_model=UserAuthResponse)
@@ -321,15 +343,9 @@ def google_login(request_body: GoogleLoginRequest, db: Session = Depends(get_db)
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid Google credential.")
 
-    if id_info.get("iss") not in ["accounts.google.com", "https://accounts.google.com"]:
-        raise HTTPException(status_code=401, detail="Invalid Google issuer.")
-
     email = id_info.get("email", "").lower()
-    if email != "david.e.brin@gmail.com":
-        raise HTTPException(status_code=403, detail="Google account not authorized.")
-
-    first_name = id_info.get("given_name", "David")
-    last_name = id_info.get("family_name", "Brin")
+    first_name = id_info.get("given_name", "User")
+    last_name = id_info.get("family_name", "")
 
     user = db.query(User).filter(User.email == email).first()
     if user is None:
@@ -361,7 +377,22 @@ def google_login(request_body: GoogleLoginRequest, db: Session = Depends(get_db)
 
 @app.post("/api/users/login", response_model=UserAuthResponse)
 def login_user(user_in: UserLogin, db: Session = Depends(get_db)) -> UserAuthResponse:
-    raise HTTPException(status_code=403, detail="Please sign in with Google.")
+    user = db.query(User).filter(User.email == user_in.email.lower()).first()
+    if user is None or not verify_password(user_in.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+    user.token = create_session_token()
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return UserAuthResponse(
+        user_id=user.id,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        token=user.token,
+    )
 
 
 @app.get("/api/users/me", response_model=UserOut)
