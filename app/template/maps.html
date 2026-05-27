@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E·SHADY — GPS Tracker</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <link rel="stylesheet" href="/static/css/global.css?v=5" />
+  <link rel="stylesheet" href="/static/css/maps.css?v=2" />
+</head>
+<body>
+  {% set active_page = 'map' %}
+  {% include "_app_header.html" %}
+
+  <div class="page">
+    <main class="tracker-layout">
+      <aside class="info-panel" aria-label="Device controls">
+        <div class="panel-header">
+          <h1 class="section-heading panel-title">Live GPS Tracker</h1>
+          <p class="panel-subtitle">Select a device to view details and set a safe zone.</p>
+        </div>
+
+        <section class="panel-block" aria-labelledby="devices-heading">
+          <div class="block-heading-row">
+            <h2 class="block-heading" id="devices-heading">Devices</h2>
+            <span class="count-badge" id="device-count">0</span>
+          </div>
+
+          <div class="device-search">
+            <label class="sr-only" for="device-search">Search devices</label>
+            <input type="search" id="device-search" placeholder="Search by name or ID…" autocomplete="off" />
+          </div>
+
+          <div class="device-list" id="device-list" role="list"></div>
+        </section>
+
+        <section class="panel-block selected-device-block" id="selected-device-block" hidden>
+          <p class="block-label">Selected</p>
+          <p class="selected-device-name" id="selected-device-name">—</p>
+          <p class="selected-device-id" id="selected-device-id"></p>
+        </section>
+
+        <section class="panel-block geofence-panel geofence-panel--idle" id="geofence-panel">
+          <h2 class="block-heading" id="geofence-heading">Safe zone</h2>
+          <p class="geofence-hint" id="geofence-hint">Choose a device from the list above to set an alert boundary on the map.</p>
+
+          <div class="geofence-controls" id="geofence-controls" hidden>
+            <div class="status-pill" id="geofence-status-pill" data-state="none">
+              <span class="status-pill-dot"></span>
+              <span id="geofence-status">No zone set</span>
+            </div>
+
+            <div class="radius-block">
+              <div class="radius-header">
+                <label class="geofence-label" for="geofence-radius">Zone radius</label>
+                <span class="radius-value"><span id="geofence-radius-val">200</span> m</span>
+              </div>
+              <input type="range" id="geofence-radius" min="50" max="2000" step="50" value="200" />
+
+              <div class="radius-presets" role="group" aria-label="Quick radius presets">
+                <button type="button" class="preset-chip" data-radius="100">100 m</button>
+                <button type="button" class="preset-chip" data-radius="200">200 m</button>
+                <button type="button" class="preset-chip" data-radius="500">500 m</button>
+                <button type="button" class="preset-chip" data-radius="1000">1 km</button>
+              </div>
+            </div>
+
+            <div class="geofence-actions">
+              <button type="button" class="btn-primary" id="btn-center-device">Center on device</button>
+              <button type="button" class="btn-outline" id="btn-place-zone-device">Place zone on device</button>
+              <button type="button" class="btn-outline" id="btn-place-zone">Click map to place zone</button>
+              <button type="button" class="btn-outline btn-danger-text" id="btn-clear-zone">Remove safe zone</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-block panel-block--compact" aria-label="Map tools">
+          <h2 class="block-heading">Map</h2>
+          <div class="panel-actions">
+            <button type="button" class="btn-primary" id="btn-fit">Show all devices</button>
+          </div>
+        </section>
+
+        <p class="last-update">Last refresh: <time id="last-update-time">never</time></p>
+      </aside>
+
+      <section class="map-section" aria-label="Map">
+        <div id="alert-stack" class="alert-stack" aria-live="polite"></div>
+        <div class="map-legend" aria-hidden="true">
+          <span><i class="legend-dot live"></i> Online</span>
+          <span><i class="legend-dot offline"></i> Offline</span>
+          <span><i class="legend-ring"></i> Safe zone</span>
+        </div>
+        <div id="map"></div>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <a href="/" class="footer-logo">
+      <span class="logo-icon" style="width:26px;height:26px;font-size:0.75rem;">☀</span>
+      E<span class="logo-dot">·</span>SHADY
+    </a>
+    <div class="footer-links">
+      <a href="/map">Map</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/alerts">Alerts</a>
+    </div>
+    <p class="footer-copy">© 2025 E·SHADY. All rights reserved.</p>
+  </footer>
+
+  <script src="/static/javascript/maps.js?v=14" defer></script>
+</body>
+</html>

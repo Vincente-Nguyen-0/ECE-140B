@@ -8,10 +8,12 @@ import secrets
 from typing import List, Optional
 from urllib.parse import urlencode
 
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load app/.env regardless of current working directory
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -22,8 +24,11 @@ from google.oauth2 import id_token
 from pydantic import BaseModel, EmailStr, Field
 import requests
 from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer,
-                        String, create_engine)
+                        String, create_engine, inspect, text)
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
+
+from gps_tracker import router as gps_router
+from gps_tracker import upsert_gps_device, compute_zone_breaches, device_is_online, devices as gps_devices, reverse_geocode_plain
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./eshady.db")
 SECRET_KEY = os.environ.get("ESHADY_SECRET_KEY", "eshady-secret-key-2026")
@@ -192,6 +197,28 @@ class StationOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DashboardStationOut(BaseModel):
+    id: Optional[int] = None
+    device_id: str
+    name: str
+    location: Optional[str]
+    latitude: float
+    longitude: float
+    battery_pct: int
+    charge_w: int
+    temperature: float
+    voltage: Optional[float]
+    online: bool
+    safe_zone: bool
+    alert: bool
+    paired_at: Optional[datetime] = None
+    last_seen: Optional[datetime] = None
+    paired: bool = True
+    live_on_map: bool = False
+
+    model_config = {"from_attributes": True}
+
+
 class TelemetryOut(BaseModel):
     id: int
     station_id: int
@@ -208,6 +235,7 @@ class TelemetryOut(BaseModel):
 
 
 app = FastAPI(title="E·Shady API")
+app.include_router(gps_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -292,9 +320,28 @@ def get_current_user(
     return user
 
 
+def migrate_db_schema() -> None:
+    """SQLite has no automatic migrations; add missing columns if needed."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+
+    if "stations" in tables:
+        cols = {c["name"] for c in inspector.get_columns("stations")}
+        if "voltage" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE stations ADD COLUMN voltage FLOAT DEFAULT 0.0"))
+
+    if "telemetry" in tables:
+        cols = {c["name"] for c in inspector.get_columns("telemetry")}
+        if "voltage" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE telemetry ADD COLUMN voltage FLOAT"))
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    migrate_db_schema()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -341,7 +388,26 @@ def signup_page(request: Request) -> HTMLResponse:
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "active_page": "dashboard"},
+    )
+
+
+@app.get("/map", response_class=HTMLResponse)
+def map_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        "maps.html",
+        {"request": request, "active_page": "map"},
+    )
+
+
+@app.get("/alerts", response_class=HTMLResponse)
+def alerts_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        "alerts.html",
+        {"request": request, "active_page": "alerts"},
+    )
 
 
 @app.get("/map", response_class=HTMLResponse)
@@ -565,6 +631,7 @@ def list_stations(current_user: User = Depends(get_current_user), db: Session = 
             battery_pct=station.battery_pct,
             charge_w=station.charge_w,
             temperature=station.temperature,
+            voltage=station.voltage,
             online=station.online,
             safe_zone=station.safe_zone,
             safe_zone_radius=station.safe_zone_radius,
@@ -574,6 +641,133 @@ def list_stations(current_user: User = Depends(get_current_user), db: Session = 
         )
         for station in db.query(Station).filter(Station.user_id == current_user.id).order_by(Station.last_seen.desc())
     ]
+
+
+def _normalize_device_id(raw: str) -> str:
+    return (raw or "").strip().upper()
+
+
+def _parse_iso_dt(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _location_label(lat: float, lng: float) -> Optional[str]:
+    """Use cached geocode only — never block dashboard on external API calls."""
+    if not lat and not lng:
+        return None
+    from gps_tracker import _geocode_cache
+
+    key = f"{lat:.4f},{lng:.4f}"
+    cached = _geocode_cache.get(key)
+    if cached:
+        return cached.replace("<br>", ", ").replace(", ,", ",").strip(" ,")
+    return None
+
+
+@app.get("/api/dashboard/stations", response_model=List[DashboardStationOut])
+def list_dashboard_stations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> List[DashboardStationOut]:
+    # Paired stations from DB
+    paired_rows = (
+        db.query(Station)
+        .filter(Station.user_id == current_user.id)
+        .order_by(Station.last_seen.desc())
+        .all()
+    )
+    paired_by_device: dict[str, Station] = { _normalize_device_id(s.device_id): s for s in paired_rows }
+
+    out: list[DashboardStationOut] = []
+
+    # Merge: paired stations, enriched by live GPS if available
+    for station in paired_rows:
+        dev_id = _normalize_device_id(station.device_id)
+        live = gps_devices.get(dev_id) or gps_devices.get(station.device_id)
+
+        lat = station.latitude
+        lng = station.longitude
+        last_seen = station.last_seen
+        online = station.online
+
+        if live:
+            live_lat = float(live.get("latitude", 0) or 0)
+            live_lng = float(live.get("longitude", 0) or 0)
+            if not (live_lat == 0 and live_lng == 0):
+                lat = live_lat
+                lng = live_lng
+            online = device_is_online(live)
+            live_seen = _parse_iso_dt(live.get("received_at"))
+            if live_seen:
+                last_seen = live_seen
+
+        location = (
+            (live.get("address_label") if live else None)
+            or station.location
+            or _location_label(lat, lng)
+        )
+
+        out.append(
+            DashboardStationOut(
+                id=station.id,
+                device_id=station.device_id,
+                name=station.name,
+                location=location,
+                latitude=lat,
+                longitude=lng,
+                battery_pct=station.battery_pct,
+                charge_w=station.charge_w,
+                temperature=station.temperature,
+                voltage=station.voltage,
+                online=online,
+                safe_zone=station.safe_zone,
+                alert=station.alert,
+                paired_at=station.paired_at,
+                last_seen=last_seen,
+                paired=True,
+                live_on_map=bool(live),
+            )
+        )
+
+    # Add unpaired live GPS devices (seen on map) so dashboard can show them
+    for live_id, live in gps_devices.items():
+        dev_id = _normalize_device_id(live_id)
+        if not dev_id or dev_id in paired_by_device:
+            continue
+        lat = float(live.get("latitude", 0) or 0)
+        lng = float(live.get("longitude", 0) or 0)
+        if lat == 0 and lng == 0:
+            continue
+        out.append(
+            DashboardStationOut(
+                id=None,
+                device_id=dev_id,
+                name=str(live.get("name") or dev_id),
+                location=live.get("address_label") or _location_label(lat, lng),
+                latitude=lat,
+                longitude=lng,
+                battery_pct=0,
+                charge_w=0,
+                temperature=0.0,
+                voltage=None,
+                online=device_is_online(live),
+                safe_zone=False,
+                alert=False,
+                paired_at=None,
+                last_seen=_parse_iso_dt(live.get("received_at")),
+                paired=False,
+                live_on_map=True,
+            )
+        )
+
+    # Put paired devices first, then unpaired live
+    out.sort(key=lambda s: (0 if s.paired else 1, s.name.lower()))
+    return out
 
 
 @app.post("/api/stations", response_model=StationOut)
@@ -750,6 +944,15 @@ def receive_esp32_telemetry(
     db.add(record)
     db.commit()
 
+    # Keep in-memory map state in sync for /map and /api/devices
+    upsert_gps_device(
+        device_id,
+        name=station.name,
+        latitude=telemetry.latitude,
+        longitude=telemetry.longitude,
+        fix_valid=True,
+    )
+
     return StationOut(
         id=station.id,
         device_id=station.device_id,
@@ -770,6 +973,24 @@ def receive_esp32_telemetry(
     )
 
 
+@app.get("/api/auth/google/config")
+def google_oauth_config_status(request: Request) -> JSONResponse:
+    """Helpful for debugging Google Sign-In locally."""
+    host = request.headers.get("host", "127.0.0.1:8000")
+    scheme = request.headers.get("x-forwarded-proto", "http")
+    origin = f"{scheme}://{host}"
+    return JSONResponse(
+        {
+            "configured": bool(os.getenv("GOOGLE_CLIENT_ID")),
+            "origin_used_by_browser": origin,
+            "add_to_google_console_javascript_origins": [
+                "http://127.0.0.1:8000",
+                "http://localhost:8000",
+            ],
+        }
+    )
+
+
 @app.get("/api/alerts", response_model=List[StationOut])
 def list_alerts(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> List[StationOut]:
     return [
@@ -783,6 +1004,7 @@ def list_alerts(current_user: User = Depends(get_current_user), db: Session = De
             battery_pct=station.battery_pct,
             charge_w=station.charge_w,
             temperature=station.temperature,
+            voltage=station.voltage,
             online=station.online,
             safe_zone=station.safe_zone,
             safe_zone_radius=station.safe_zone_radius,
@@ -832,3 +1054,10 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    # Bind on all interfaces so ESP32 / other devices can reach the server.
+    uvicorn.run("server_api_fastapi:app", host="0.0.0.0", port=8000, reload=True)

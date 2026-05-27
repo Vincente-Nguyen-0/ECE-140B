@@ -33,7 +33,27 @@ async function fetchJSON(url, options = {}) {
   const response = await fetch(url, options);
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.detail || response.statusText || 'Request failed');
+    const detail = data?.detail;
+    if (typeof detail === 'string' && detail.trim()) {
+      throw new Error(detail);
+    }
+    // FastAPI validation errors commonly return: { detail: [ {loc,msg,type}, ... ] }
+    if (Array.isArray(detail)) {
+      const msg = detail
+        .map((item) => {
+          const loc = Array.isArray(item?.loc) ? item.loc.join('.') : '';
+          const m = item?.msg || '';
+          if (loc && m) return `${loc}: ${m}`;
+          return m || JSON.stringify(item);
+        })
+        .filter(Boolean)
+        .join(' · ');
+      throw new Error(msg || 'Request failed');
+    }
+    if (detail && typeof detail === 'object') {
+      throw new Error(JSON.stringify(detail));
+    }
+    throw new Error(response.statusText || 'Request failed');
   }
   return response.json();
 }
