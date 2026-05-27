@@ -3,19 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>E·Shady — Dashboard</title>
+  <title>E&middot;Shady - Dashboard</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  
-  <link rel="stylesheet" href="/static/css/global.css?v=7">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=8">
 
+  <link rel="stylesheet" href="/static/css/global.css?v=7">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=9">
 </head>
 <body>
-
   <div class="sky-canvas">
     <div class="sun-glow"></div>
     <div class="sun-core"></div>
@@ -26,47 +24,43 @@
   </div>
 
   <div class="app">
-    <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <a href="/dashboard" class="logo">
           <div class="logo-icon"><i class="fas fa-sun"></i></div>
-          E<span class="logo-dot">·</span>Shady
+          E<span class="logo-dot">&middot;</span>Shady
         </a>
       </div>
 
       <nav class="sidebar-nav">
         <span class="nav-label">Overview</span>
-        <button class="nav-item active" data-action="dashboard">
+        <button class="nav-item active" data-action="dashboard" type="button">
           <i class="fas fa-th-large"></i> Dashboard
         </button>
-        <button class="nav-item" data-action="map">
+        <button class="nav-item" data-action="map" type="button">
           <i class="fas fa-map-marked-alt"></i> Map View
         </button>
 
         <span class="nav-label" style="margin-top:0.6rem;">Security</span>
-        <button class="nav-item" data-action="alerts">
+        <button class="nav-item" data-action="alerts" type="button">
           <i class="fas fa-shield-alt"></i> Alerts
-          <span class="nav-badge"></span>
-        </button>
-        <button class="nav-item" data-action="event-log">
-          <i class="fas fa-history"></i> Event Log
+          <span class="nav-badge" id="alertsNavBadge" hidden>0</span>
         </button>
 
         <span class="nav-label" style="margin-top:0.6rem;">Account</span>
-        <button class="nav-item" data-action="settings">
+        <button class="nav-item" data-action="settings" type="button">
           <i class="fas fa-cog"></i> Settings
         </button>
-        <button class="nav-item" data-action="sign-out">
+        <button class="nav-item" data-action="sign-out" type="button">
           <i class="fas fa-sign-out-alt"></i> Sign Out
         </button>
       </nav>
 
       <div class="sidebar-user">
-        <div class="user-avatar">A</div>
+        <div class="user-avatar">U</div>
         <div class="user-info">
-          <div class="user-name" id="sidebarUserName">Andrew</div>
-          <div class="user-email" id="sidebarUserEmail">signed in</div>
+          <div class="user-name" id="sidebarUserName">Signed in</div>
+          <div class="user-email" id="sidebarUserEmail">Loading profile</div>
         </div>
       </div>
     </aside>
@@ -75,14 +69,14 @@
       <div class="topbar">
         <div class="topbar-left">
           <h1>My Dashboard</h1>
-          <p id="dashboardStatus">Welcome back, Andrew — your stations are active.</p>
+          <p id="dashboardStatus">Welcome back. Checking your devices.</p>
         </div>
         <div class="topbar-right">
-          <button id="connectUmbrellaBtn" class="btn-primary" type="button" style="margin-right:0.75rem;">Connect Umbrella</button>
+          <button id="connectUmbrellaBtn" class="btn-primary" type="button">Connect Device</button>
           <span class="topbar-time" id="liveTime"></span>
-          <button class="notif-btn" id="notifBtn">
+          <button class="notif-btn" id="notifBtn" type="button" aria-label="Alerts">
             <i class="fas fa-bell"></i>
-            <span class="notif-dot"></span>
+            <span class="notif-dot" hidden></span>
           </button>
         </div>
       </div>
@@ -91,13 +85,13 @@
         <div class="umbrellas-grid" id="umbrellaGrid">
           <div class="dashboard-placeholder" id="stationLoading">
             <div class="placeholder-icon"><i class="fas fa-spinner fa-spin"></i></div>
-            <div class="placeholder-text">Loading your umbrella stations...</div>
+            <div class="placeholder-text">Checking for devices...</div>
           </div>
-        </div><!-- /umbrellas-grid -->
-      </div><!-- /content -->
+        </div>
+      </div>
     </main>
   </div>
 
-  <script src="/static/javascript/dashboard.js?v=3"></script>
+  <script src="/static/javascript/dashboard.js?v=4"></script>
 </body>
 </html>

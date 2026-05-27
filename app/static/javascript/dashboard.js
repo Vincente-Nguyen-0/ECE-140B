@@ -25,7 +25,7 @@ async function fetchJSON(url, options = {}) {
     if (response.status === 401) {
         localStorage.removeItem('eshady_token');
         window.location.href = '/login';
-        return;
+        return null;
     }
 
     if (!response.ok) {
@@ -38,38 +38,48 @@ async function fetchJSON(url, options = {}) {
     return response.json();
 }
 
+function displayNameForUser(user) {
+    const firstName = String(user?.first_name || '').trim();
+    const lastName = String(user?.last_name || '').trim();
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    if (fullName) return fullName;
+    const emailName = String(user?.email || '').split('@')[0].trim();
+    return emailName || 'there';
+}
+
+function updateProfile(user) {
+    const displayName = displayNameForUser(user);
+    const firstInitial = displayName.charAt(0).toUpperCase() || 'U';
+
+    const userName = document.getElementById('sidebarUserName');
+    if (userName) userName.textContent = displayName;
+
+    const userEmail = document.getElementById('sidebarUserEmail');
+    if (userEmail) userEmail.textContent = user?.email || 'signed in';
+
+    const userAvatar = document.querySelector('.user-avatar');
+    if (userAvatar) userAvatar.textContent = firstInitial;
+
+    const status = document.getElementById('dashboardStatus');
+    if (status) status.textContent = `Welcome back, ${displayName}.`;
+}
+
 async function loadDashboard() {
     try {
         const user = await fetchJSON(`${API_BASE}/users/me`, { headers: getAuthHeaders() });
-        if (user?.first_name) {
-            const userName = document.getElementById('sidebarUserName');
-            if (userName) userName.textContent = user.first_name;
-            const userEmail = document.getElementById('sidebarUserEmail');
-            if (userEmail) userEmail.textContent = user.email;
-            const userAvatar = document.querySelector('.user-avatar');
-            if (userAvatar) userAvatar.textContent = user.first_name.charAt(0).toUpperCase();
-            const welcomeText = document.querySelector('.topbar-left p');
-            if (welcomeText) welcomeText.textContent = `Welcome back, ${user.first_name} — your stations are active.`;
-        }
+        if (!user) return;
+        updateProfile(user);
 
         const stations = await fetchJSON(`${API_BASE}/dashboard/stations`, { headers: getAuthHeaders() });
         renderStations(stations || []);
-        // Fetch active alerts for current user and update UI
+        updateDashboardStatus(stations || [], user);
+
         try {
             const alerts = await fetchJSON(`${API_BASE}/alerts`, { headers: getAuthHeaders() });
             updateAlertsUI(alerts || []);
-        } catch (e) {
-            console.warn('Unable to load alerts', e);
-        }
-        const status = document.getElementById('dashboardStatus');
-        if (status) {
-            const list = stations || [];
-            const paired = list.filter(s => s.paired).length;
-            const liveOnly = list.filter(s => !s.paired && s.live_on_map).length;
-            const total = list.length;
-            if (total === 0) status.textContent = 'No umbrellas yet. Pair a device to get started.';
-            else if (liveOnly > 0) status.textContent = `${paired} paired · ${liveOnly} live on map · ${total} total device${total === 1 ? '' : 's'}.`;
-            else status.textContent = `${paired} paired umbrella${paired === 1 ? '' : 's'} · live location updates.`;
+        } catch (err) {
+            console.warn('Unable to load alerts', err);
+            updateAlertsUI([]);
         }
     } catch (err) {
         console.error(err);
@@ -77,25 +87,46 @@ async function loadDashboard() {
     }
 }
 
-function updateAlertsUI(alerts) {
-    const notifBtn = document.getElementById('notifBtn');
-    const notifDot = notifBtn ? notifBtn.querySelector('.notif-dot') : null;
-    const sidebarAlertBtn = Array.from(document.querySelectorAll('.nav-item')).find(n => n.getAttribute('data-action') === 'alerts');
-    const navBadge = sidebarAlertBtn ? sidebarAlertBtn.querySelector('.nav-badge') : null;
+function updateDashboardStatus(stations, user) {
+    const status = document.getElementById('dashboardStatus');
+    if (!status) return;
 
+    const displayName = displayNameForUser(user);
+    const paired = stations.filter((station) => station.paired !== false).length;
+    const liveOnly = stations.filter((station) => station.paired === false && station.live_on_map).length;
+    const total = stations.length;
+
+    if (total === 0) {
+        status.textContent = `Welcome back, ${displayName}. Connect a device to get started.`;
+    } else if (liveOnly > 0) {
+        status.textContent = `${paired} paired, ${liveOnly} ready to pair.`;
+    } else {
+        status.textContent = `${paired} paired device${paired === 1 ? '' : 's'} with live GPS tracking.`;
+    }
+}
+
+function updateAlertsUI(alerts) {
     const count = alerts.length || 0;
-    if (notifDot) notifDot.style.display = count > 0 ? 'inline-block' : 'none';
+    const notifDot = document.querySelector('#notifBtn .notif-dot');
+    const navBadge = document.getElementById('alertsNavBadge');
+
+    if (notifDot) notifDot.hidden = count === 0;
     if (navBadge) {
-        navBadge.textContent = count > 0 ? String(count) : '';
-        navBadge.style.display = count > 0 ? 'inline-block' : 'none';
+        navBadge.textContent = count > 0 ? String(count) : '0';
+        navBadge.hidden = count === 0;
     }
 }
 
 function showLandingError(message) {
-    const placeholder = document.getElementById('stationLoading');
-    if (placeholder) {
-        placeholder.innerHTML = `<div class="placeholder-icon"><i class="fas fa-exclamation-circle"></i></div><div class="placeholder-text">${message}</div>`;
-    }
+    const grid = document.getElementById('umbrellaGrid');
+    if (!grid) return;
+    grid.innerHTML = `
+      <div class="dashboard-placeholder" id="stationLoading">
+        <div class="placeholder-icon"><i class="fas fa-exclamation-circle"></i></div>
+        <div class="placeholder-text">${escapeHTML(message)}</div>
+      </div>
+      ${createAddCard()}
+    `;
 }
 
 function renderStations(stations) {
@@ -109,48 +140,48 @@ function renderStations(stations) {
         return String(a.name || a.device_id).localeCompare(String(b.name || b.device_id));
     });
 
-    const stationCards = sorted.map(station => createStationCard(station)).join('');
-    const addCard = `
-      <div class="add-card" id="addCard" onclick="openAddModal()">
-        <div class="add-card-icon"><i class="fas fa-plus"></i></div>
-        <div class="add-card-title">Connect Umbrella</div>
-        <div class="add-card-sub">Pair a new E·Shady device using its unique device ID (MAC-based or board ID).</div>
-      </div>
-    `;
+    const stationCards = sorted.map((station) => createStationCard(station)).join('');
+    grid.innerHTML = stationCards + createAddCard();
+}
 
-    grid.innerHTML = stationCards + addCard;
+function createAddCard() {
+    return `
+      <button class="add-card" id="addCard" type="button" onclick="connectDevice()">
+        <span class="add-card-icon"><i class="fas fa-plus"></i></span>
+        <span class="add-card-title">Connect Device</span>
+        <span class="add-card-sub">Find an ESP32 reporting GPS on this network or enter its MAC address.</span>
+      </button>
+    `;
 }
 
 function createStationCard(station) {
     const isPaired = station.paired !== false;
     const isLiveOnly = !isPaired && station.live_on_map;
-    const statusClass = station.online ? 'online' : 'offline';
+    const statusClass = station.alert ? 'alert' : station.online ? 'online' : 'offline';
     const badgeClass = station.alert ? 'badge-alert' : station.online ? 'badge-online' : 'badge-offline';
-    const statusText = station.alert ? '⚠ Alert' : station.online ? (isLiveOnly ? '● Live on map' : '● Online') : 'Offline';
-    const guardTitle = station.alert ? 'Outside Safezone!' : 'Theft Guard';
-    const guardSub = station.alert ? `${new Date(station.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · GPS logged` : station.safe_zone ? 'Armed · Inside Safezone' : 'Disarmed';
+    const statusText = station.alert ? 'Alert' : station.online ? (isLiveOnly ? 'Ready to pair' : 'Online') : 'Offline';
+    const guardTitle = station.alert ? 'Outside Safe Zone' : 'Theft Guard';
+    const guardSub = station.alert
+        ? `${new Date(station.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - GPS logged`
+        : station.safe_zone ? 'Armed - inside safe zone' : 'Disarmed';
     const cardClass = station.alert ? 'umb-card alert-active' : 'umb-card';
-    const batteryWidth = Math.max(0, Math.min(100, station.battery_pct));
-    const pairedText = isPaired && station.paired_at ? `Paired ${formatDaysAgo(station.paired_at)}` : (isLiveOnly ? 'Seen on map' : 'Not paired');
+    const batteryWidth = Math.max(0, Math.min(100, Number(station.battery_pct) || 0));
+    const pairedText = isPaired && station.paired_at ? `Paired ${formatDaysAgo(station.paired_at)}` : (isLiveOnly ? 'Discovered by GPS' : 'Not paired');
     const locationText = normalizeAddressText(station.location)
-        || (station.latitude && station.longitude ? `${station.latitude.toFixed(5)}, ${station.longitude.toFixed(5)}` : 'Awaiting GPS location');
+        || (station.latitude && station.longitude ? `${Number(station.latitude).toFixed(5)}, ${Number(station.longitude).toFixed(5)}` : 'Awaiting GPS location');
 
     return `
-      <div class="${cardClass}" id="card-${station.id || station.device_id}">
+      <article class="${cardClass}" id="card-${escapeHTML(station.id || station.device_id)}">
         <div class="umb-card-top">
           <div class="umb-identity">
             <div class="umb-name">
               <span class="status-dot ${statusClass}"></span>
-              ${escapeHTML(station.name)}
+              ${escapeHTML(station.name || station.device_id)}
             </div>
-            <div class="umb-id">ID: ${escapeHTML(station.device_id)} · ${escapeHTML(pairedText)}</div>
-            <div class="umb-location"><i class="fas fa-map-marker-alt" style="color:${station.alert ? 'var(--danger)' : 'var(--sun)'};font-size:0.65rem;"></i> ${escapeHTML(locationText)}</div>
+            <div class="umb-id">ID: ${escapeHTML(station.device_id)} - ${escapeHTML(pairedText)}</div>
+            <div class="umb-location"><i class="fas fa-map-marker-alt"></i> ${escapeHTML(locationText)}</div>
           </div>
-          <span class="umb-status-badge ${badgeClass}">${statusText}</span>
-        </div>
-
-        <div class="umb-metrics">
-          <!-- Metrics removed; battery progress bar remains below -->
+          <span class="umb-status-badge ${badgeClass}">${escapeHTML(statusText)}</span>
         </div>
 
         ${isPaired ? `
@@ -162,52 +193,52 @@ function createStationCard(station) {
           <span class="battery-pct">${batteryWidth}%</span>
         </div>` : ''}
 
-        <div class="guard-row" style="${station.alert ? 'background:rgba(231,76,60,0.04);' : ''}">
+        <div class="guard-row${station.alert ? ' guard-alert' : ''}">
           <div class="guard-left">
-            <div class="guard-icon ${station.alert ? 'triggered' : 'armed'}"><i class="fas ${station.alert ? 'fa-exclamation-triangle' : 'fa-shield-alt'}"></i></div>
+            <div class="guard-icon ${station.alert ? 'triggered' : station.safe_zone ? 'armed' : 'disarmed'}">
+              <i class="fas ${station.alert ? 'fa-exclamation-triangle' : 'fa-shield-alt'}"></i>
+            </div>
             <div>
-              <div class="guard-title" style="${station.alert ? 'color:var(--danger);' : ''}">${escapeHTML(guardTitle)}</div>
+              <div class="guard-title">${escapeHTML(guardTitle)}</div>
               <div class="guard-sub">${escapeHTML(guardSub)}</div>
             </div>
           </div>
-          ${isPaired ? (
-              station.alert
-                ? `<button class="action-btn danger-action" style="width:auto;padding:0.35rem 0.8rem;font-size:0.72rem;" onclick="resolveAlert(${station.id})">Dismiss</button>`
-                : `<label class="toggle" title="Toggle Theft Guard">
-                    <input type="checkbox" ${station.safe_zone ? 'checked' : ''} onchange="toggleGuard(this, ${station.id})">
-                    <span class="toggle-slider"></span>
-                  </label>`
-            ) : `<span class="guard-sub" style="color:var(--sun);">Pair this device to save it to your account and enable theft guard.</span>`
-          }
+          ${createGuardControl(station, isPaired)}
         </div>
 
         <div class="umb-actions">
-          <button class="action-btn primary-action" onclick="viewOnMap('${escapeHTML(station.device_id)}', ${Number(station.latitude) || 0}, ${Number(station.longitude) || 0})">
+          <button class="action-btn primary-action" type="button" onclick="viewOnMap('${escapeJS(station.device_id)}', ${Number(station.latitude) || 0}, ${Number(station.longitude) || 0})">
             <i class="fas fa-map-marked-alt"></i> View on Map
           </button>
-          ${isPaired ? `<button class="action-btn danger-action" onclick="removeCard('card-${station.id}', '${escapeHTML(station.name)}', ${station.id})">
+          ${isPaired ? `<button class="action-btn danger-action" type="button" onclick="removeCard('card-${escapeJS(station.id || station.device_id)}', '${escapeJS(station.name || station.device_id)}', ${Number(station.id)})">
               <i class="fas fa-trash-alt"></i>
             </button>`
-            : `<button class="action-btn" onclick="pairLiveDevice('${escapeHTML(station.device_id)}', '${escapeHTML(station.name)}')">
+            : `<button class="action-btn" type="button" onclick="pairDiscoveredDevice('${escapeJS(station.device_id)}', '${escapeJS(station.name || station.device_id)}')">
                 <i class="fas fa-link"></i> Pair
               </button>`
           }
         </div>
-      </div>
+      </article>
     `;
 }
 
-function renderSolarBars(value) {
-    const bars = [];
-    for (let i = 0; i < 6; i += 1) {
-        const height = Math.max(18, Math.min(80, value - i * 6));
-        bars.push(`<span style="height:${height}px"></span>`);
+function createGuardControl(station, isPaired) {
+    if (!isPaired) {
+        return '<span class="guard-sub connect-hint">Pair to enable theft guard.</span>';
     }
-    return bars.join('');
+    if (station.alert) {
+        return `<button class="action-btn danger-action compact-action" type="button" onclick="resolveAlert(${Number(station.id)})">Dismiss</button>`;
+    }
+    return `
+      <label class="toggle" title="Toggle Theft Guard">
+        <input type="checkbox" ${station.safe_zone ? 'checked' : ''} onchange="toggleGuard(this, ${Number(station.id)})">
+        <span class="toggle-slider"></span>
+      </label>
+    `;
 }
 
 function escapeHTML(value) {
-    return String(value)
+    return String(value ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -215,61 +246,88 @@ function escapeHTML(value) {
         .replace(/'/g, '&#039;');
 }
 
+function escapeJS(value) {
+    return String(value ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '');
+}
+
 function formatDaysAgo(value) {
     const date = new Date(value);
     const days = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (!Number.isFinite(days) || days < 0) return 'today';
     if (days === 0) return 'today';
     if (days === 1) return '1 day ago';
     return `${days} days ago`;
 }
 
-function timeAgo(value) {
-    const date = new Date(value);
-    const diff = Date.now() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes} min ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours}h ago`;
+async function discoverDevices() {
+    const devices = await fetchJSON(`${API_BASE}/esp32/discover`, { headers: getAuthHeaders() });
+    return devices || [];
 }
 
-async function openAddModal() {
-    const deviceId = prompt('Enter device ID (use the device MAC-based ID if available, e.g. 24A1B2C3D4E5)');
-    if (!deviceId) return;
-
-    const name = prompt('Enter a friendly name for this station', 'E·Shady Station');
-    if (!name) return;
-
-    const location = prompt('Enter a location description', 'Beach side');
+async function connectDevice() {
     try {
-        await fetchJSON(`${API_BASE}/stations`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({ device_id: deviceId, name, location }),
-        });
-        toast('Station paired successfully.');
-        loadDashboard();
+        const devices = await discoverDevices();
+        if (devices.length > 0) {
+            const menu = devices
+                .map((device, index) => `${index + 1}. ${device.name || 'ESP32'} - ${device.device_id}${device.online ? ' (online)' : ''}`)
+                .join('\n');
+            const choice = prompt(`Found ESP32 devices reporting GPS:\n\n${menu}\n\nEnter a number to pair, or enter a MAC/device ID manually.`);
+            if (!choice) return;
+
+            const selectedIndex = Number(choice.trim()) - 1;
+            if (Number.isInteger(selectedIndex) && devices[selectedIndex]) {
+                await pairDiscoveredDevice(devices[selectedIndex].device_id, devices[selectedIndex].name);
+                return;
+            }
+
+            await pairManualDevice(choice.trim());
+            return;
+        }
+
+        const manualId = prompt('No live ESP32 GPS devices were found yet. Enter the ESP32 MAC/device ID manually.');
+        if (manualId) await pairManualDevice(manualId.trim());
     } catch (err) {
         toast(err.message);
     }
 }
 
-function pairLiveDevice(deviceId, suggestedName) {
-    const id = prompt('Enter device ID', deviceId);
-    if (!id) return;
-    const name = prompt('Enter a friendly name for this station', suggestedName || 'E·Shady Station');
+async function pairDiscoveredDevice(deviceId, suggestedName) {
+    const name = prompt('Enter a friendly name for this station', suggestedName || 'E-Shady Station');
     if (!name) return;
-    const location = prompt('Enter a location description', 'Beach side');
-    fetchJSON(`${API_BASE}/stations`, {
+    const location = prompt('Enter a location description', 'Current GPS location');
+
+    await pairDevice({
+        device_id: deviceId,
+        name,
+        location,
+    });
+}
+
+async function pairManualDevice(deviceId) {
+    if (!deviceId) return;
+    const name = prompt('Enter a friendly name for this station', 'E-Shady Station');
+    if (!name) return;
+    const location = prompt('Enter a location description', 'Current GPS location');
+
+    await pairDevice({
+        device_id: deviceId,
+        name,
+        location,
+    });
+}
+
+async function pairDevice(payload) {
+    await fetchJSON(`${API_BASE}/esp32/pair`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ device_id: id, name, location }),
-    })
-        .then(() => {
-            toast('Station paired successfully.');
-            loadDashboard();
-        })
-        .catch((err) => toast(err.message));
+        body: JSON.stringify(payload),
+    });
+    toast('Device paired successfully.');
+    await loadDashboard();
 }
 
 function viewOnMap(deviceId, lat, lng) {
@@ -288,7 +346,7 @@ async function toggleGuard(checkbox, stationId) {
             body: JSON.stringify({ safe_zone: checkbox.checked }),
         });
         toast(`Theft guard ${checkbox.checked ? 'armed' : 'disarmed'}.`);
-        loadDashboard();
+        await loadDashboard();
     } catch (err) {
         toast(err.message);
         checkbox.checked = !checkbox.checked;
@@ -296,7 +354,7 @@ async function toggleGuard(checkbox, stationId) {
 }
 
 async function removeCard(cardId, stationName, stationId) {
-    if (!confirm(`Remove ${stationName} from your account?`)) return;
+    if (!stationId || !confirm(`Remove ${stationName} from your account?`)) return;
     try {
         await fetchJSON(`${API_BASE}/stations/${stationId}`, {
             method: 'DELETE',
@@ -305,6 +363,7 @@ async function removeCard(cardId, stationName, stationId) {
         const card = document.getElementById(cardId);
         if (card) card.remove();
         toast(`${stationName} removed.`);
+        await loadDashboard();
     } catch (err) {
         toast(err.message);
     }
@@ -318,7 +377,7 @@ async function resolveAlert(stationId) {
             body: JSON.stringify({ alert: false, safe_zone: true }),
         });
         toast('Alert resolved.');
-        loadDashboard();
+        await loadDashboard();
     } catch (err) {
         toast(err.message);
     }
@@ -329,44 +388,16 @@ function logout() {
     window.location.href = '/login';
 }
 
-async function updateAlertsNavBadge() {
-    const badge = document.getElementById('alertsNavBadge');
-    if (!badge) return;
-    try {
-        const payload = await fetch(`${API_BASE}/alerts/zone`).then((r) => r.json());
-        const devicesOnline = payload?.devices_online ?? 0;
-        const count = devicesOnline > 0 ? (payload?.count ?? payload?.alerts?.length ?? 0) : 0;
-        badge.textContent = String(count);
-        badge.hidden = count === 0;
-    } catch {
-        badge.hidden = true;
-    }
-}
-
 function initNavigation() {
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-            const action = e.currentTarget.getAttribute('data-action');
-            if (action === 'sign-out') {
-                logout();
-                return;
-            }
-            if (action === 'map') {
-                window.location.href = '/map';
-                return;
-            }
-<<<<<<< Updated upstream
-=======
-            if (action === 'alerts') {
-                window.location.href = '/alerts';
-                return;
-            }
-            if (action === 'dashboard') {
-                window.location.href = '/dashboard';
-                return;
-            }
->>>>>>> Stashed changes
-            toast(`${action.charAt(0).toUpperCase() + action.slice(1)} coming soon.`);
+    document.querySelectorAll('.nav-item').forEach((item) => {
+        item.addEventListener('click', (event) => {
+            const action = event.currentTarget.getAttribute('data-action');
+            if (action === 'sign-out') return logout();
+            if (action === 'dashboard') return window.location.assign('/dashboard');
+            if (action === 'map') return window.location.assign('/map');
+            if (action === 'alerts') return window.location.assign('/alerts');
+            if (action === 'settings') return toast('Settings coming soon.');
+            toast('That section is coming soon.');
         });
     });
 
@@ -410,13 +441,17 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateTime, 1000);
     loadDashboard();
     setInterval(loadDashboard, 15000);
-    updateAlertsNavBadge();
-    setInterval(updateAlertsNavBadge, 5000);
 
     const connectBtn = document.getElementById('connectUmbrellaBtn');
     if (connectBtn) {
-        connectBtn.addEventListener('click', openAddModal);
+        connectBtn.addEventListener('click', connectDevice);
     }
 
-    window.openAddModal = openAddModal;
+    window.openAddModal = connectDevice;
+    window.connectDevice = connectDevice;
+    window.pairDiscoveredDevice = pairDiscoveredDevice;
+    window.viewOnMap = viewOnMap;
+    window.toggleGuard = toggleGuard;
+    window.removeCard = removeCard;
+    window.resolveAlert = resolveAlert;
 });

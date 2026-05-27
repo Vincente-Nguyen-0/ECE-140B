@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import time
 from datetime import datetime
 from typing import Any, Optional
@@ -42,7 +43,11 @@ _last_geocode_at = 0.0
 
 
 def normalize_device_id(device_id: str) -> str:
-    return (device_id or "").strip().upper()
+    value = (device_id or "").strip().upper()
+    compact_mac = re.sub(r"[^0-9A-F]", "", value)
+    if len(compact_mac) == 12 and re.fullmatch(r"[0-9A-F]{12}", compact_mac):
+        return compact_mac
+    return value
 
 
 def load_geofences() -> None:

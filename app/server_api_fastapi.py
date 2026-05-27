@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 from typing import List, Optional
 from urllib.parse import urlencode
@@ -72,6 +73,8 @@ class Station(Base):
     paired_at = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, default=datetime.utcnow)
     safe_zone_radius = Column(Float, default=100.0)
+    safe_zone_lat = Column(Float, nullable=True)
+    safe_zone_lng = Column(Float, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"))
 
     owner = relationship("User", back_populates="stations")
@@ -137,6 +140,15 @@ class StationCreate(BaseModel):
     location: Optional[str] = None
     latitude: Optional[float] = 0.0
     longitude: Optional[float] = 0.0
+    safe_zone_radius: Optional[float] = 100.0
+
+    model_config = {"from_attributes": True}
+
+
+class DevicePairRequest(BaseModel):
+    device_id: str
+    name: Optional[str] = None
+    location: Optional[str] = None
     safe_zone_radius: Optional[float] = 100.0
 
     model_config = {"from_attributes": True}
@@ -215,6 +227,20 @@ class DashboardStationOut(BaseModel):
     last_seen: Optional[datetime] = None
     paired: bool = True
     live_on_map: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class DiscoveredDeviceOut(BaseModel):
+    device_id: str
+    mac: Optional[str] = None
+    name: str
+    latitude: float
+    longitude: float
+    online: bool
+    fix_valid: bool
+    received_at: Optional[datetime] = None
+    paired: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -330,6 +356,15 @@ def migrate_db_schema() -> None:
         if "voltage" not in cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE stations ADD COLUMN voltage FLOAT DEFAULT 0.0"))
+        if "safe_zone_radius" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE stations ADD COLUMN safe_zone_radius FLOAT DEFAULT 100.0"))
+        if "safe_zone_lat" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE stations ADD COLUMN safe_zone_lat FLOAT"))
+        if "safe_zone_lng" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE stations ADD COLUMN safe_zone_lng FLOAT"))
 
     if "telemetry" in tables:
         cols = {c["name"] for c in inspector.get_columns("telemetry")}
@@ -408,11 +443,6 @@ def alerts_page(request: Request) -> HTMLResponse:
         "alerts.html",
         {"request": request, "active_page": "alerts"},
     )
-
-
-@app.get("/map", response_class=HTMLResponse)
-def map_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("map.html", {"request": request})
 
 
 def get_public_base_url(request: Request) -> str:
@@ -644,7 +674,11 @@ def list_stations(current_user: User = Depends(get_current_user), db: Session = 
 
 
 def _normalize_device_id(raw: str) -> str:
-    return (raw or "").strip().upper()
+    value = (raw or "").strip().upper()
+    compact_mac = re.sub(r"[^0-9A-F]", "", value)
+    if len(compact_mac) == 12 and re.fullmatch(r"[0-9A-F]{12}", compact_mac):
+        return compact_mac
+    return value
 
 
 def _parse_iso_dt(value: Optional[str]) -> Optional[datetime]:
@@ -660,13 +694,66 @@ def _location_label(lat: float, lng: float) -> Optional[str]:
     """Use cached geocode only — never block dashboard on external API calls."""
     if not lat and not lng:
         return None
-    from gps_tracker import _geocode_cache
+    from app.gps_tracker import _geocode_cache
 
     key = f"{lat:.4f},{lng:.4f}"
     cached = _geocode_cache.get(key)
     if cached:
         return cached.replace("<br>", ", ").replace(", ,", ",").strip(" ,")
     return None
+
+
+def _gps_aliases(device: dict, fallback_id: str) -> set[str]:
+    return {
+        _normalize_device_id(str(value))
+        for value in (fallback_id, device.get("id"), device.get("mac"))
+        if value
+    }
+
+
+def _find_live_gps_device(device_id: str) -> Optional[dict]:
+    normalized = _normalize_device_id(device_id)
+    for live_id, live in gps_devices.items():
+        if normalized in _gps_aliases(live, live_id):
+            return live
+    return None
+
+
+def _find_station_by_device_id(db: Session, device_id: str) -> Optional[Station]:
+    normalized = _normalize_device_id(device_id)
+    station = db.query(Station).filter(Station.device_id == normalized).first()
+    if station is not None:
+        return station
+    for candidate in db.query(Station).all():
+        if _normalize_device_id(candidate.device_id) == normalized:
+            return candidate
+    return None
+
+
+def _station_alert_for_position(station: Station, lat: float, lng: float) -> bool:
+    if not station.safe_zone:
+        return False
+    if station.safe_zone_lat is None or station.safe_zone_lng is None:
+        return bool(station.alert)
+    radius = float(station.safe_zone_radius or 100.0)
+    return haversine_distance(float(station.safe_zone_lat), float(station.safe_zone_lng), lat, lng) > radius
+
+
+def _discovered_device_out(live_id: str, live: dict, paired_ids: set[str]) -> DiscoveredDeviceOut:
+    aliases = _gps_aliases(live, live_id)
+    device_id = _normalize_device_id(str(live.get("mac") or live.get("id") or live_id))
+    received_at = _parse_iso_dt(live.get("received_at"))
+    return DiscoveredDeviceOut(
+        device_id=device_id,
+        mac=live.get("mac") or device_id,
+        name=str(live.get("name") or device_id),
+        latitude=float(live.get("latitude", 0) or 0),
+        longitude=float(live.get("longitude", 0) or 0),
+        online=device_is_online(live),
+        fix_valid=bool(live.get("fix_valid")),
+        received_at=received_at,
+        paired=bool(aliases & paired_ids),
+    )
 
 
 @app.get("/api/dashboard/stations", response_model=List[DashboardStationOut])
@@ -688,7 +775,7 @@ def list_dashboard_stations(
     # Merge: paired stations, enriched by live GPS if available
     for station in paired_rows:
         dev_id = _normalize_device_id(station.device_id)
-        live = gps_devices.get(dev_id) or gps_devices.get(station.device_id)
+        live = _find_live_gps_device(dev_id)
 
         lat = station.latitude
         lng = station.longitude
@@ -726,7 +813,7 @@ def list_dashboard_stations(
                 voltage=station.voltage,
                 online=online,
                 safe_zone=station.safe_zone,
-                alert=station.alert,
+                alert=_station_alert_for_position(station, float(lat or 0), float(lng or 0)),
                 paired_at=station.paired_at,
                 last_seen=last_seen,
                 paired=True,
@@ -737,7 +824,7 @@ def list_dashboard_stations(
     # Add unpaired live GPS devices (seen on map) so dashboard can show them
     for live_id, live in gps_devices.items():
         dev_id = _normalize_device_id(live_id)
-        if not dev_id or dev_id in paired_by_device:
+        if not dev_id or (_gps_aliases(live, live_id) & set(paired_by_device.keys())):
             continue
         lat = float(live.get("latitude", 0) or 0)
         lng = float(live.get("longitude", 0) or 0)
@@ -770,32 +857,118 @@ def list_dashboard_stations(
     return out
 
 
+@app.get("/api/esp32/discover", response_model=List[DiscoveredDeviceOut])
+def discover_esp32_devices(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> List[DiscoveredDeviceOut]:
+    paired_rows = db.query(Station).filter(Station.user_id == current_user.id).all()
+    paired_ids = {_normalize_device_id(station.device_id) for station in paired_rows}
+    discovered = [
+        _discovered_device_out(live_id, live, paired_ids)
+        for live_id, live in gps_devices.items()
+    ]
+    discovered.sort(key=lambda item: (item.paired, not item.online, item.name.lower()))
+    return discovered
+
+
+@app.post("/api/esp32/pair", response_model=StationOut)
+def pair_esp32_device(
+    pair_in: DevicePairRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StationOut:
+    device_id = _normalize_device_id(pair_in.device_id)
+    if not device_id:
+        raise HTTPException(status_code=400, detail="Device ID is required.")
+
+    live = _find_live_gps_device(device_id)
+    existing = _find_station_by_device_id(db, device_id)
+    if existing is not None and existing.user_id not in (None, current_user.id):
+        raise HTTPException(status_code=400, detail="That station is already paired.")
+
+    live_lat = float(live.get("latitude", 0) or 0) if live else 0.0
+    live_lng = float(live.get("longitude", 0) or 0) if live else 0.0
+    station_name = (pair_in.name or (live.get("name") if live else None) or f"E-Shady {device_id[-4:]}").strip()
+    location = (pair_in.location or (live.get("address_label") if live else None) or _location_label(live_lat, live_lng) or "Current GPS location").strip()
+
+    station = existing or Station(device_id=device_id, name=station_name)
+    station.device_id = device_id
+    station.user_id = current_user.id
+    station.name = station_name
+    station.location = location
+    station.online = device_is_online(live) if live else station.online
+    station.latitude = live_lat or station.latitude or 0.0
+    station.longitude = live_lng or station.longitude or 0.0
+    station.safe_zone = True
+    station.safe_zone_radius = float(pair_in.safe_zone_radius or station.safe_zone_radius or 100.0)
+    if live_lat or live_lng:
+        station.safe_zone_lat = live_lat
+        station.safe_zone_lng = live_lng
+    station.alert = False
+    station.paired_at = datetime.utcnow()
+    station.last_seen = datetime.utcnow()
+
+    db.add(station)
+    db.commit()
+    db.refresh(station)
+
+    return StationOut(
+        id=station.id,
+        device_id=station.device_id,
+        name=station.name,
+        location=station.location,
+        latitude=station.latitude,
+        longitude=station.longitude,
+        battery_pct=station.battery_pct,
+        charge_w=station.charge_w,
+        temperature=station.temperature,
+        voltage=station.voltage,
+        online=station.online,
+        safe_zone=station.safe_zone,
+        safe_zone_radius=station.safe_zone_radius,
+        alert=station.alert,
+        paired_at=station.paired_at,
+        last_seen=station.last_seen,
+    )
+
+
 @app.post("/api/stations", response_model=StationOut)
 def create_station(
     station_in: StationCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> StationOut:
-    device_id = station_in.device_id.strip().upper()
-    existing = db.query(Station).filter(Station.device_id == device_id).first()
+    device_id = _normalize_device_id(station_in.device_id)
+    existing = _find_station_by_device_id(db, device_id)
     if existing is not None:
         if existing.user_id is not None and existing.user_id != current_user.id:
             raise HTTPException(status_code=400, detail="That station is already paired.")
 
         existing.user_id = current_user.id
+        existing.device_id = device_id
         existing.name = station_in.name.strip()
         existing.location = station_in.location.strip() if station_in.location else existing.location
         existing.latitude = station_in.latitude or existing.latitude
         existing.longitude = station_in.longitude or existing.longitude
+        existing.safe_zone_radius = float(station_in.safe_zone_radius or existing.safe_zone_radius or 100.0)
+        if station_in.latitude or station_in.longitude:
+            existing.safe_zone_lat = station_in.latitude
+            existing.safe_zone_lng = station_in.longitude
         existing.paired_at = datetime.utcnow()
         station = existing
     else:
+        latitude = station_in.latitude or 0.0
+        longitude = station_in.longitude or 0.0
         station = Station(
             device_id=device_id,
             name=station_in.name.strip(),
             location=station_in.location.strip() if station_in.location else None,
-            latitude=station_in.latitude or 0.0,
-            longitude=station_in.longitude or 0.0,
+            latitude=latitude,
+            longitude=longitude,
+            safe_zone_radius=float(station_in.safe_zone_radius or 100.0),
+            safe_zone_lat=latitude if latitude or longitude else None,
+            safe_zone_lng=longitude if latitude or longitude else None,
             user_id=current_user.id,
             last_seen=datetime.utcnow(),
         )
@@ -884,8 +1057,8 @@ def receive_esp32_telemetry(
     db: Session = Depends(get_db),
     user_id: Optional[int] = None,
 ) -> StationOut:
-    device_id = telemetry.device_id.strip().upper()
-    station = db.query(Station).filter(Station.device_id == device_id).first()
+    device_id = _normalize_device_id(telemetry.device_id)
+    station = _find_station_by_device_id(db, device_id)
     if station is None:
         station = Station(
             device_id=device_id,
@@ -900,31 +1073,29 @@ def receive_esp32_telemetry(
             online=True,
             safe_zone=telemetry.safe_zone,
             alert=telemetry.alert,
+            safe_zone_lat=telemetry.latitude,
+            safe_zone_lng=telemetry.longitude,
             last_seen=datetime.utcnow(),
         )
         db.add(station)
         db.commit()
         db.refresh(station)
     else:
+        station.device_id = device_id
         station.battery_pct = telemetry.battery_pct
         station.charge_w = telemetry.charge_w
         station.temperature = telemetry.temperature
         station.voltage = telemetry.voltage or station.voltage
+        station.safe_zone = telemetry.safe_zone
+        if station.user_id is not None and station.safe_zone:
+            if station.safe_zone_lat is None or station.safe_zone_lng is None:
+                station.safe_zone_lat = telemetry.latitude
+                station.safe_zone_lng = telemetry.longitude
+            station.alert = _station_alert_for_position(station, telemetry.latitude, telemetry.longitude)
+        else:
+            station.alert = telemetry.alert
         station.latitude = telemetry.latitude
         station.longitude = telemetry.longitude
-        station.safe_zone = telemetry.safe_zone
-        # Determine whether the incoming GPS is outside the configured safe zone radius
-        try:
-            radius = float(station.safe_zone_radius or 100.0)
-        except Exception:
-            radius = 100.0
-
-        if station.user_id is not None and station.safe_zone and station.latitude and station.longitude:
-            dist = haversine_distance(station.latitude, station.longitude, telemetry.latitude, telemetry.longitude)
-            station.alert = dist > radius
-        else:
-            # If the station isn't paired or safe_zone not configured, keep incoming alert flag
-            station.alert = telemetry.alert
         station.online = True
         station.last_seen = datetime.utcnow()
         db.add(station)
@@ -970,24 +1141,6 @@ def receive_esp32_telemetry(
         alert=station.alert,
         paired_at=station.paired_at,
         last_seen=station.last_seen,
-    )
-
-
-@app.get("/api/auth/google/config")
-def google_oauth_config_status(request: Request) -> JSONResponse:
-    """Helpful for debugging Google Sign-In locally."""
-    host = request.headers.get("host", "127.0.0.1:8000")
-    scheme = request.headers.get("x-forwarded-proto", "http")
-    origin = f"{scheme}://{host}"
-    return JSONResponse(
-        {
-            "configured": bool(os.getenv("GOOGLE_CLIENT_ID")),
-            "origin_used_by_browser": origin,
-            "add_to_google_console_javascript_origins": [
-                "http://127.0.0.1:8000",
-                "http://localhost:8000",
-            ],
-        }
     )
 
 
