@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>E·SHADY — GPS Tracker</title>
+  <title>E&middot;SHADY - GPS Tracker</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,7 +13,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <link rel="stylesheet" href="/static/css/global.css?v=5" />
-  <link rel="stylesheet" href="/static/css/maps.css?v=2" />
+  <link rel="stylesheet" href="/static/css/maps.css?v=3" />
 </head>
 <body>
   {% set active_page = 'map' %}
@@ -35,7 +35,7 @@
 
           <div class="device-search">
             <label class="sr-only" for="device-search">Search devices</label>
-            <input type="search" id="device-search" placeholder="Search by name or ID…" autocomplete="off" />
+            <input type="search" id="device-search" placeholder="Search by name or ID..." autocomplete="off" />
           </div>
 
           <div class="device-list" id="device-list" role="list"></div>
@@ -43,7 +43,7 @@
 
         <section class="panel-block selected-device-block" id="selected-device-block" hidden>
           <p class="block-label">Selected</p>
-          <p class="selected-device-name" id="selected-device-name">—</p>
+          <p class="selected-device-name" id="selected-device-name">-</p>
           <p class="selected-device-id" id="selected-device-id"></p>
         </section>
 
@@ -104,18 +104,18 @@
   </div>
 
   <footer>
-    <a href="/" class="footer-logo">
-      <span class="logo-icon" style="width:26px;height:26px;font-size:0.75rem;">☀</span>
-      E<span class="logo-dot">·</span>SHADY
+    <a href="/dashboard" class="footer-logo">
+      <span class="logo-icon" style="width:26px;height:26px;font-size:0.75rem;">&#9728;</span>
+      E<span class="logo-dot">&middot;</span>SHADY
     </a>
     <div class="footer-links">
       <a href="/map">Map</a>
       <a href="/dashboard">Dashboard</a>
       <a href="/alerts">Alerts</a>
     </div>
-    <p class="footer-copy">© 2025 E·SHADY. All rights reserved.</p>
+    <p class="footer-copy">&copy; 2025 E&middot;SHADY. All rights reserved.</p>
   </footer>
 
-  <script src="/static/javascript/maps.js?v=14" defer></script>
+  <script src="/static/javascript/maps.js?v=15" defer></script>
 </body>
 </html>

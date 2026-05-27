@@ -332,9 +332,7 @@ async function pairDevice(payload) {
 
 function viewOnMap(deviceId, lat, lng) {
     if (!deviceId) return;
-    if (lat && lng) {
-        sessionStorage.setItem(MAP_FOCUS_KEY, JSON.stringify({ deviceId, lat, lng }));
-    }
+    sessionStorage.setItem(MAP_FOCUS_KEY, JSON.stringify({ deviceId, lat: lat || null, lng: lng || null }));
     window.location.href = '/map';
 }
 

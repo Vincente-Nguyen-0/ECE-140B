@@ -1,14 +1,13 @@
 <header id="site-header">
-  <a href="/" class="logo">
-    <span class="logo-icon">☀</span>
-    E<span class="logo-dot">·</span>SHADY
+  <a href="/dashboard" class="logo">
+    <span class="logo-icon">&#9728;</span>
+    E<span class="logo-dot">&middot;</span>SHADY
   </a>
   <nav>
     <div class="header-status" id="header-status" title="App status">
       <span class="indicator-dot" id="status-dot"></span>
-      <span class="status-label" id="status-label">Checking…</span>
+      <span class="status-label" id="status-label">Checking...</span>
     </div>
-    {# Map page → link to Alerts only. Alerts page → link to Map only. #}
     {% if active_page == 'map' %}
     <a href="/alerts" class="btn-signin btn-signin--ghost">Alerts</a>
     {% endif %}
