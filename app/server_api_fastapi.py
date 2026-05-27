@@ -27,8 +27,8 @@ from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer,
                         String, create_engine, inspect, text)
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
-from gps_tracker import router as gps_router
-from gps_tracker import upsert_gps_device, compute_zone_breaches, device_is_online, devices as gps_devices, reverse_geocode_plain
+from app.gps_tracker import router as gps_router
+from app.gps_tracker import upsert_gps_device, compute_zone_breaches, device_is_online, devices as gps_devices, reverse_geocode_plain
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./eshady.db")
 SECRET_KEY = os.environ.get("ESHADY_SECRET_KEY", "eshady-secret-key-2026")
