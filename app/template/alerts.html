@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E·SHADY — Safe Zone Alerts</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <link rel="stylesheet" href="/static/css/global.css?v=5" />
+  <link rel="stylesheet" href="/static/css/alerts.css?v=2" />
+</head>
+<body>
+  <div class="sky-canvas">
+    <div class="sun-glow"></div>
+    <div class="sun-core"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+    <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+  </div>
+
+  {% set active_page = 'alerts' %}
+  {% include "_app_header.html" %}
+
+  <div class="page alerts-page">
+    <main class="alerts-layout">
+      <div class="panel-header">
+        <h1 class="section-heading panel-title">Safe Zone Alerts</h1>
+        <p class="panel-subtitle">
+          Umbrellas that leave their configured safe zone appear here. Set zones on the
+          <a href="/map">live map</a>.
+        </p>
+      </div>
+
+      <section class="panel-block alerts-summary" aria-live="polite">
+        <div class="summary-stat summary-stat--danger">
+          <span class="summary-value" id="alert-count">0</span>
+          <span class="summary-label">Outside safe zone</span>
+        </div>
+        <div class="summary-stat">
+          <span class="summary-value" id="monitored-count">—</span>
+          <span class="summary-label">Safe zones set</span>
+        </div>
+        <div class="summary-stat">
+          <span class="summary-value" id="devices-online-count">—</span>
+          <span class="summary-label">Devices live</span>
+        </div>
+        <p class="summary-updated">Last checked: <time id="last-checked">never</time></p>
+      </section>
+
+      <section class="panel-block" aria-labelledby="alerts-heading">
+        <div class="block-heading-row">
+          <h2 class="block-heading" id="alerts-heading">Active alerts</h2>
+          <span class="count-badge count-badge--danger" id="alerts-badge">0</span>
+        </div>
+
+        <div id="alerts-list" class="alerts-list" role="list"></div>
+
+        <div id="alerts-empty" class="alerts-empty" hidden>
+          <span class="empty-icon" aria-hidden="true">✓</span>
+          <strong class="alerts-empty-title">All umbrellas are in their safe zones</strong>
+          <p class="alerts-empty-sub">No devices are outside their configured radius right now.</p>
+        </div>
+
+        <div id="alerts-setup" class="alerts-empty alerts-empty--muted" hidden>
+          <span class="empty-icon" aria-hidden="true">◎</span>
+          <strong class="alerts-empty-title">No safe zones configured</strong>
+          <p class="alerts-empty-sub">Open the map and place a safe zone to enable alerts.</p>
+          <a href="/map" class="btn-primary alerts-cta">Open map</a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <a href="/" class="footer-logo">
+      <span class="logo-icon" style="width:26px;height:26px;font-size:0.75rem;">☀</span>
+      E<span class="logo-dot">·</span>SHADY
+    </a>
+    <div class="footer-links">
+      <a href="/map">Map</a>
+      <a href="/dashboard">Dashboard</a>
+    </div>
+    <p class="footer-copy">© 2025 E·SHADY. All rights reserved.</p>
+  </footer>
+
+  <script src="/static/javascript/alerts.js?v=4" defer></script>
+</body>
+</html>
+

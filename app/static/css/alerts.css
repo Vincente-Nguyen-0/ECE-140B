@@ -1,0 +1,220 @@
+/* Alerts page styling - mirrors map visual language */
+
+.alerts-page {
+  padding-top: var(--header-h);
+  min-height: 100vh;
+}
+
+.alerts-layout {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-lg) var(--space-md) var(--space-2xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.panel-title {
+  font-size: clamp(1.35rem, 2.5vw, 1.85rem) !important;
+  margin-bottom: 0.35rem;
+}
+
+.panel-subtitle {
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.panel-subtitle a {
+  color: var(--sun);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.panel-block {
+  padding: var(--space-md);
+  background: rgba(10, 37, 64, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+}
+
+.alerts-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .alerts-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.summary-stat--danger .summary-value {
+  color: #fca5a5;
+}
+
+.summary-value {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--sun);
+}
+
+.summary-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.summary-updated {
+  grid-column: 1 / -1;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin: 0.3rem 0 0;
+}
+
+.block-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.block-heading {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sun);
+  margin: 0;
+}
+
+.count-badge--danger {
+  background: rgba(231, 76, 60, 0.2);
+  color: #fca5a5;
+  border-color: rgba(231, 76, 60, 0.4);
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+/* `hidden` must win over display:flex on empty/setup panels */
+.alerts-empty[hidden],
+.alerts-setup[hidden],
+.alerts-list[hidden] {
+  display: none !important;
+}
+
+.zone-alert-card {
+  display: flex;
+  gap: 0.85rem;
+  padding: 1rem 1.05rem;
+  background: rgba(127, 29, 29, 0.35);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: var(--radius-md);
+  animation: alert-in 0.35s ease-out;
+}
+
+.zone-alert-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: rgba(231, 76, 60, 0.25);
+  color: #fca5a5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.zone-alert-body { flex: 1; min-width: 0; }
+.zone-alert-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.15rem;
+}
+
+.zone-alert-id {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  margin-bottom: 0.45rem;
+}
+
+.zone-alert-msg {
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.zone-alert-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.alerts-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.alerts-empty-title {
+  color: var(--white);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.alerts-empty-sub {
+  font-size: 0.82rem;
+  max-width: 28rem;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--muted);
+}
+
+.alerts-cta { margin-top: 0.75rem; display: inline-block; }
+
+.empty-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  margin-bottom: 0.35rem;
+  background: rgba(46, 204, 113, 0.15);
+  color: var(--leaf);
+}
+
+.alerts-empty--muted .empty-icon {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+@keyframes alert-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+

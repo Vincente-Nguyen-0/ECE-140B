@@ -1,4 +1,15 @@
 const API_BASE = '/api';
+const MAP_FOCUS_KEY = 'eshady_map_focus';
+
+function normalizeAddressText(value) {
+    if (!value) return null;
+    return String(value)
+        .replace(/<br\s*\/?>/gi, ', ')
+        .replace(/\s*,\s*/g, ', ')
+        .replace(/,+/g, ',')
+        .replace(/^,\s*|\s*,$/g, '')
+        .trim();
+}
 
 function getAuthHeaders() {
     const token = localStorage.getItem('eshady_token');
@@ -41,12 +52,17 @@ async function loadDashboard() {
             if (welcomeText) welcomeText.textContent = `Welcome back, ${user.first_name} — your stations are active.`;
         }
 
-        const stations = await fetchJSON(`${API_BASE}/stations`, { headers: getAuthHeaders() });
+        const stations = await fetchJSON(`${API_BASE}/dashboard/stations`, { headers: getAuthHeaders() });
         renderStations(stations || []);
         const status = document.getElementById('dashboardStatus');
         if (status) {
-            const count = stations?.length || 0;
-            status.textContent = `${count} connected umbrella${count === 1 ? '' : 's'} · live power and location updates.`;
+            const list = stations || [];
+            const paired = list.filter(s => s.paired).length;
+            const liveOnly = list.filter(s => !s.paired && s.live_on_map).length;
+            const total = list.length;
+            if (total === 0) status.textContent = 'No umbrellas yet. Pair a device to get started.';
+            else if (liveOnly > 0) status.textContent = `${paired} paired · ${liveOnly} live on map · ${total} total device${total === 1 ? '' : 's'}.`;
+            else status.textContent = `${paired} paired umbrella${paired === 1 ? '' : 's'} · live location updates.`;
         }
     } catch (err) {
         console.error(err);
@@ -65,7 +81,14 @@ function renderStations(stations) {
     const grid = document.getElementById('umbrellaGrid');
     if (!grid) return;
 
-    const stationCards = stations.map(station => createStationCard(station)).join('');
+    const sorted = [...stations].sort((a, b) => {
+        const aOnline = a.online ? 1 : 0;
+        const bOnline = b.online ? 1 : 0;
+        if (aOnline !== bOnline) return bOnline - aOnline;
+        return String(a.name || a.device_id).localeCompare(String(b.name || b.device_id));
+    });
+
+    const stationCards = sorted.map(station => createStationCard(station)).join('');
     const addCard = `
       <div class="add-card" id="addCard" onclick="openAddModal()">
         <div class="add-card-icon"><i class="fas fa-plus"></i></div>
@@ -78,59 +101,45 @@ function renderStations(stations) {
 }
 
 function createStationCard(station) {
+    const isPaired = station.paired !== false;
+    const isLiveOnly = !isPaired && station.live_on_map;
     const statusClass = station.online ? 'online' : 'offline';
-    const badgeClass = station.alert ? 'badge-alert' : 'badge-online';
-    const statusText = station.alert ? '⚠ Alert' : station.online ? '● Online' : 'Offline';
+    const badgeClass = station.alert ? 'badge-alert' : station.online ? 'badge-online' : 'badge-offline';
+    const statusText = station.alert ? '⚠ Alert' : station.online ? (isLiveOnly ? '● Live on map' : '● Online') : 'Offline';
     const guardTitle = station.alert ? 'Outside Safezone!' : 'Theft Guard';
     const guardSub = station.alert ? `${new Date(station.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · GPS logged` : station.safe_zone ? 'Armed · Inside Safezone' : 'Disarmed';
     const cardClass = station.alert ? 'umb-card alert-active' : 'umb-card';
     const batteryWidth = Math.max(0, Math.min(100, station.battery_pct));
+    const pairedText = isPaired && station.paired_at ? `Paired ${formatDaysAgo(station.paired_at)}` : (isLiveOnly ? 'Seen on map' : 'Not paired');
+    const locationText = normalizeAddressText(station.location)
+        || (station.latitude && station.longitude ? `${station.latitude.toFixed(5)}, ${station.longitude.toFixed(5)}` : 'Awaiting GPS location');
 
     return `
-      <div class="${cardClass}" id="card-${station.id}">
+      <div class="${cardClass}" id="card-${station.id || station.device_id}">
         <div class="umb-card-top">
           <div class="umb-identity">
             <div class="umb-name">
               <span class="status-dot ${statusClass}"></span>
               ${escapeHTML(station.name)}
             </div>
-            <div class="umb-id">ID: ${escapeHTML(station.device_id)} · Paired ${formatDaysAgo(station.paired_at)}</div>
-            <div class="umb-location"><i class="fas fa-map-marker-alt" style="color:${station.alert ? 'var(--danger)' : 'var(--sun)'};font-size:0.65rem;"></i> ${escapeHTML(station.location || 'Awaiting GPS location')}</div>
+            <div class="umb-id">ID: ${escapeHTML(station.device_id)} · ${escapeHTML(pairedText)}</div>
+            <div class="umb-location"><i class="fas fa-map-marker-alt" style="color:${station.alert ? 'var(--danger)' : 'var(--sun)'};font-size:0.65rem;"></i> ${escapeHTML(locationText)}</div>
           </div>
           <span class="umb-status-badge ${badgeClass}">${statusText}</span>
         </div>
 
         <div class="umb-metrics">
-          <div class="metric">
-            <div class="metric-val sun">${station.charge_w}W</div>
-            <div class="metric-lbl">Solar Output</div>
-          </div>
-          <div class="metric">
-            <div class="metric-val leaf">${station.battery_pct}%</div>
-            <div class="metric-lbl">Battery</div>
-          </div>
-          <div class="metric">
-            <div class="metric-val" style="color:var(--sun-bright);">${station.temperature.toFixed(1)}°C</div>
-            <div class="metric-lbl">Temp</div>
-          </div>
-          <div class="metric">
-            <div class="metric-val" style="color:var(--voltage);">${station.voltage ? station.voltage.toFixed(2) + 'V' : 'N/A'}</div>
-            <div class="metric-lbl">Voltage</div>
-          </div>
+          <!-- Metrics removed; battery progress bar remains below -->
         </div>
 
+        ${isPaired ? `
         <div class="battery-row">
           <span class="battery-lbl"><i class="fas fa-battery-half"></i>&nbsp; Battery</span>
           <div class="battery-track">
             <div class="battery-fill" style="width:${batteryWidth}%"></div>
           </div>
           <span class="battery-pct">${batteryWidth}%</span>
-        </div>
-
-        <div class="solar-visual">
-          <div class="solar-bars">${renderSolarBars(station.charge_w)}</div>
-          <div class="solar-sub">Last update ${timeAgo(station.last_seen)} · avg ${station.charge_w}W</div>
-        </div>
+        </div>` : ''}
 
         <div class="guard-row" style="${station.alert ? 'background:rgba(231,76,60,0.04);' : ''}">
           <div class="guard-left">
@@ -140,22 +149,28 @@ function createStationCard(station) {
               <div class="guard-sub">${escapeHTML(guardSub)}</div>
             </div>
           </div>
-          ${station.alert ? `<button class="action-btn danger-action" style="width:auto;padding:0.35rem 0.8rem;font-size:0.72rem;" onclick="resolveAlert(${station.id})">Dismiss</button>` : `<label class="toggle" title="Toggle Theft Guard">
-              <input type="checkbox" ${station.safe_zone ? 'checked' : ''} onchange="toggleGuard(this, ${station.id})">
-              <span class="toggle-slider"></span>
-            </label>`}
+          ${isPaired ? (
+              station.alert
+                ? `<button class="action-btn danger-action" style="width:auto;padding:0.35rem 0.8rem;font-size:0.72rem;" onclick="resolveAlert(${station.id})">Dismiss</button>`
+                : `<label class="toggle" title="Toggle Theft Guard">
+                    <input type="checkbox" ${station.safe_zone ? 'checked' : ''} onchange="toggleGuard(this, ${station.id})">
+                    <span class="toggle-slider"></span>
+                  </label>`
+            ) : `<span class="guard-sub" style="color:var(--sun);">Pair this device to save it to your account and enable theft guard.</span>`
+          }
         </div>
 
         <div class="umb-actions">
-          <button class="action-btn primary-action" onclick="toast('Live stats are being loaded for ${escapeHTML(station.device_id)}...')">
-            <i class="fas fa-chart-area"></i> Live Stats
+          <button class="action-btn primary-action" onclick="viewOnMap('${escapeHTML(station.device_id)}', ${Number(station.latitude) || 0}, ${Number(station.longitude) || 0})">
+            <i class="fas fa-map-marked-alt"></i> View on Map
           </button>
-          <button class="action-btn" onclick="locateStation(${station.id})">
-            <i class="fas fa-map-marker-alt"></i> Locate
-          </button>
-          <button class="action-btn danger-action" onclick="removeCard('card-${station.id}', '${escapeHTML(station.name)}', ${station.id})">
-            <i class="fas fa-trash-alt"></i>
-          </button>
+          ${isPaired ? `<button class="action-btn danger-action" onclick="removeCard('card-${station.id}', '${escapeHTML(station.name)}', ${station.id})">
+              <i class="fas fa-trash-alt"></i>
+            </button>`
+            : `<button class="action-btn" onclick="pairLiveDevice('${escapeHTML(station.device_id)}', '${escapeHTML(station.name)}')">
+                <i class="fas fa-link"></i> Pair
+              </button>`
+          }
         </div>
       </div>
     `;
@@ -218,6 +233,32 @@ async function openAddModal() {
     }
 }
 
+function pairLiveDevice(deviceId, suggestedName) {
+    const id = prompt('Enter device ID', deviceId);
+    if (!id) return;
+    const name = prompt('Enter a friendly name for this station', suggestedName || 'E·Shady Station');
+    if (!name) return;
+    const location = prompt('Enter a location description', 'Beach side');
+    fetchJSON(`${API_BASE}/stations`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ device_id: id, name, location }),
+    })
+        .then(() => {
+            toast('Station paired successfully.');
+            loadDashboard();
+        })
+        .catch((err) => toast(err.message));
+}
+
+function viewOnMap(deviceId, lat, lng) {
+    if (!deviceId) return;
+    if (lat && lng) {
+        sessionStorage.setItem(MAP_FOCUS_KEY, JSON.stringify({ deviceId, lat, lng }));
+    }
+    window.location.href = '/map';
+}
+
 async function toggleGuard(checkbox, stationId) {
     try {
         await fetchJSON(`${API_BASE}/stations/${stationId}`, {
@@ -262,14 +303,23 @@ async function resolveAlert(stationId) {
     }
 }
 
-function locateStation(stationId) {
-    toast('GPS location requested. Map view will update shortly.');
-    // Future enhancement: show a map modal with the precise coordinates.
-}
-
 function logout() {
     localStorage.removeItem('eshady_token');
     window.location.href = '/login';
+}
+
+async function updateAlertsNavBadge() {
+    const badge = document.getElementById('alertsNavBadge');
+    if (!badge) return;
+    try {
+        const payload = await fetch(`${API_BASE}/alerts/zone`).then((r) => r.json());
+        const devicesOnline = payload?.devices_online ?? 0;
+        const count = devicesOnline > 0 ? (payload?.count ?? payload?.alerts?.length ?? 0) : 0;
+        badge.textContent = String(count);
+        badge.hidden = count === 0;
+    } catch {
+        badge.hidden = true;
+    }
 }
 
 function initNavigation() {
@@ -284,13 +334,26 @@ function initNavigation() {
                 window.location.href = '/map';
                 return;
             }
+<<<<<<< Updated upstream
+=======
+            if (action === 'alerts') {
+                window.location.href = '/alerts';
+                return;
+            }
+            if (action === 'dashboard') {
+                window.location.href = '/dashboard';
+                return;
+            }
+>>>>>>> Stashed changes
             toast(`${action.charAt(0).toUpperCase() + action.slice(1)} coming soon.`);
         });
     });
 
     const notifBtn = document.getElementById('notifBtn');
     if (notifBtn) {
-        notifBtn.addEventListener('click', () => toast('You have 1 unread alert.'));
+        notifBtn.addEventListener('click', () => {
+            window.location.href = '/alerts';
+        });
     }
 }
 
@@ -326,6 +389,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateTime, 1000);
     loadDashboard();
     setInterval(loadDashboard, 15000);
+    updateAlertsNavBadge();
+    setInterval(updateAlertsNavBadge, 5000);
 
     const connectBtn = document.getElementById('connectUmbrellaBtn');
     if (connectBtn) {

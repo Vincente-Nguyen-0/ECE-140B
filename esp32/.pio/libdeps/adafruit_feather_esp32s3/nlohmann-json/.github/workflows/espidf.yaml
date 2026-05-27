@@ -1,0 +1,41 @@
+name: ESP-IDF CI
+on: [workflow_call, push]
+jobs:
+  esp_idf_build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version:
+          - name: v44_build
+            version_number: release-v4.4
+            target: esp32c3
+          - name: v50_build
+            version_number: release-v5.0
+            target: esp32c3
+          - name: v51_build
+            version_number: release-v5.1
+            target: esp32c6
+          - name: v52_build
+            version_number: release-v5.2
+            target: esp32c6
+          - name: v53_build
+            version_number: release-v5.3
+            target: esp32c6
+          - name: v54_build
+            version_number: release-v5.4
+            target: esp32c6
+        example:
+          - name: simple
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      - name: ESP-IDF Build
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: ${{ matrix.version.version_number }}
+          target: ${{ matrix.version.target }}
+          path: examples/espidf/${{ matrix.example.name }}
