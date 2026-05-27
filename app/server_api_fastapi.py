@@ -1,4 +1,5 @@
 from datetime import datetime
+import math
 import hashlib
 import hmac
 import json
@@ -65,6 +66,7 @@ class Station(Base):
     alert = Column(Boolean, default=False)
     paired_at = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, default=datetime.utcnow)
+    safe_zone_radius = Column(Float, default=100.0)
     user_id = Column(Integer, ForeignKey("users.id"))
 
     owner = relationship("User", back_populates="stations")
@@ -130,6 +132,7 @@ class StationCreate(BaseModel):
     location: Optional[str] = None
     latitude: Optional[float] = 0.0
     longitude: Optional[float] = 0.0
+    safe_zone_radius: Optional[float] = 100.0
 
     model_config = {"from_attributes": True}
 
@@ -181,6 +184,7 @@ class StationOut(BaseModel):
     voltage: Optional[float]
     online: bool
     safe_zone: bool
+    safe_zone_radius: float
     alert: bool
     paired_at: datetime
     last_seen: datetime
@@ -563,6 +567,7 @@ def list_stations(current_user: User = Depends(get_current_user), db: Session = 
             temperature=station.temperature,
             online=station.online,
             safe_zone=station.safe_zone,
+            safe_zone_radius=station.safe_zone_radius,
             alert=station.alert,
             paired_at=station.paired_at,
             last_seen=station.last_seen,
@@ -577,19 +582,29 @@ def create_station(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> StationOut:
-    existing = db.query(Station).filter(Station.device_id == station_in.device_id).first()
+    device_id = station_in.device_id.strip().upper()
+    existing = db.query(Station).filter(Station.device_id == device_id).first()
     if existing is not None:
-        raise HTTPException(status_code=400, detail="That station is already paired.")
+        if existing.user_id is not None and existing.user_id != current_user.id:
+            raise HTTPException(status_code=400, detail="That station is already paired.")
 
-    station = Station(
-        device_id=station_in.device_id.strip().upper(),
-        name=station_in.name.strip(),
-        location=station_in.location.strip() if station_in.location else None,
-        latitude=station_in.latitude or 0.0,
-        longitude=station_in.longitude or 0.0,
-        user_id=current_user.id,
-        last_seen=datetime.utcnow(),
-    )
+        existing.user_id = current_user.id
+        existing.name = station_in.name.strip()
+        existing.location = station_in.location.strip() if station_in.location else existing.location
+        existing.latitude = station_in.latitude or existing.latitude
+        existing.longitude = station_in.longitude or existing.longitude
+        existing.paired_at = datetime.utcnow()
+        station = existing
+    else:
+        station = Station(
+            device_id=device_id,
+            name=station_in.name.strip(),
+            location=station_in.location.strip() if station_in.location else None,
+            latitude=station_in.latitude or 0.0,
+            longitude=station_in.longitude or 0.0,
+            user_id=current_user.id,
+            last_seen=datetime.utcnow(),
+        )
 
     db.add(station)
     db.commit()
@@ -608,6 +623,7 @@ def create_station(
         voltage=station.voltage,
         online=station.online,
         safe_zone=station.safe_zone,
+        safe_zone_radius=station.safe_zone_radius,
         alert=station.alert,
         paired_at=station.paired_at,
         last_seen=station.last_seen,
@@ -646,6 +662,7 @@ def update_station(
         voltage=station.voltage,
         online=station.online,
         safe_zone=station.safe_zone,
+        safe_zone_radius=station.safe_zone_radius,
         alert=station.alert,
         paired_at=station.paired_at,
         last_seen=station.last_seen,
@@ -702,7 +719,18 @@ def receive_esp32_telemetry(
         station.latitude = telemetry.latitude
         station.longitude = telemetry.longitude
         station.safe_zone = telemetry.safe_zone
-        station.alert = telemetry.alert
+        # Determine whether the incoming GPS is outside the configured safe zone radius
+        try:
+            radius = float(station.safe_zone_radius or 100.0)
+        except Exception:
+            radius = 100.0
+
+        if station.user_id is not None and station.safe_zone and station.latitude and station.longitude:
+            dist = haversine_distance(station.latitude, station.longitude, telemetry.latitude, telemetry.longitude)
+            station.alert = dist > radius
+        else:
+            # If the station isn't paired or safe_zone not configured, keep incoming alert flag
+            station.alert = telemetry.alert
         station.online = True
         station.last_seen = datetime.utcnow()
         db.add(station)
@@ -716,7 +744,7 @@ def receive_esp32_telemetry(
         voltage=telemetry.voltage,
         latitude=telemetry.latitude,
         longitude=telemetry.longitude,
-        alert=telemetry.alert,
+        alert=station.alert,
         safe_zone=telemetry.safe_zone,
     )
     db.add(record)
@@ -735,6 +763,7 @@ def receive_esp32_telemetry(
         voltage=station.voltage,
         online=station.online,
         safe_zone=station.safe_zone,
+        safe_zone_radius=station.safe_zone_radius,
         alert=station.alert,
         paired_at=station.paired_at,
         last_seen=station.last_seen,
@@ -756,6 +785,7 @@ def list_alerts(current_user: User = Depends(get_current_user), db: Session = De
             temperature=station.temperature,
             online=station.online,
             safe_zone=station.safe_zone,
+            safe_zone_radius=station.safe_zone_radius,
             alert=station.alert,
             paired_at=station.paired_at,
             last_seen=station.last_seen,
@@ -791,3 +821,14 @@ def get_telemetry(
         )
         for record in records
     ]
+
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return distance in meters between two lat/lon points."""
+    R = 6371000.0  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))

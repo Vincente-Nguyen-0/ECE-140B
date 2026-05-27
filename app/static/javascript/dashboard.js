@@ -43,6 +43,13 @@ async function loadDashboard() {
 
         const stations = await fetchJSON(`${API_BASE}/stations`, { headers: getAuthHeaders() });
         renderStations(stations || []);
+        // Fetch active alerts for current user and update UI
+        try {
+            const alerts = await fetchJSON(`${API_BASE}/alerts`, { headers: getAuthHeaders() });
+            updateAlertsUI(alerts || []);
+        } catch (e) {
+            console.warn('Unable to load alerts', e);
+        }
         const status = document.getElementById('dashboardStatus');
         if (status) {
             const count = stations?.length || 0;
@@ -51,6 +58,20 @@ async function loadDashboard() {
     } catch (err) {
         console.error(err);
         showLandingError('Unable to load stations. Please sign in again.');
+    }
+}
+
+function updateAlertsUI(alerts) {
+    const notifBtn = document.getElementById('notifBtn');
+    const notifDot = notifBtn ? notifBtn.querySelector('.notif-dot') : null;
+    const sidebarAlertBtn = Array.from(document.querySelectorAll('.nav-item')).find(n => n.getAttribute('data-action') === 'alerts');
+    const navBadge = sidebarAlertBtn ? sidebarAlertBtn.querySelector('.nav-badge') : null;
+
+    const count = alerts.length || 0;
+    if (notifDot) notifDot.style.display = count > 0 ? 'inline-block' : 'none';
+    if (navBadge) {
+        navBadge.textContent = count > 0 ? String(count) : '';
+        navBadge.style.display = count > 0 ? 'inline-block' : 'none';
     }
 }
 
@@ -70,7 +91,7 @@ function renderStations(stations) {
       <div class="add-card" id="addCard" onclick="openAddModal()">
         <div class="add-card-icon"><i class="fas fa-plus"></i></div>
         <div class="add-card-title">Connect Umbrella</div>
-        <div class="add-card-sub">Pair a new E·Shady device and start live tracking.</div>
+        <div class="add-card-sub">Pair a new E·Shady device using its unique device ID (MAC-based or board ID).</div>
       </div>
     `;
 
@@ -198,7 +219,7 @@ function timeAgo(value) {
 }
 
 async function openAddModal() {
-    const deviceId = prompt('Enter device ID (for example ESH-003)');
+    const deviceId = prompt('Enter device ID (use the device MAC-based ID if available, e.g. 24A1B2C3D4E5)');
     if (!deviceId) return;
 
     const name = prompt('Enter a friendly name for this station', 'E·Shady Station');

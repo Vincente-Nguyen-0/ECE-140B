@@ -10,8 +10,8 @@ String password = "YOUR_PASSWORD";
 // Backend URL
 const char* serverUrl = "https://your-render-app.onrender.com/api/esp32/telemetry";
 
-// Device ID
-const char* deviceId = "esp32_001";
+// Device ID (use unique board MAC address by default)
+String deviceId;
 
 // Pins
 const int voltagePin = 34; // Analog pin for voltage
@@ -29,6 +29,15 @@ void setup() {
   Serial.println("\n[E·Shady] Starting ESP32 Telemetry...");
   
   gpsSerial.begin(9600, SERIAL_8N1, gpsRxPin, gpsTxPin);
+
+  // Use the ESP32 MAC address as a unique device ID.
+  // If you want to use a custom unique ID instead, replace this assignment.
+  WiFi.mode(WIFI_STA);
+  deviceId = WiFi.macAddress();
+  deviceId.replace(":", "");
+  deviceId.toUpperCase();
+  Serial.print("[E·Shady] Device ID: ");
+  Serial.println(deviceId);
 
   // Connect to WiFi
   wifiManager.connectToWiFi(ssid, password);
